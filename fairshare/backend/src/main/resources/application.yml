@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/fairshare
+    username: fairshare_user
+    password: fairshare_pass
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+  jackson:
+    time-zone: America/New_York
+  devtools:
+    restart:
+      enabled: true
+
+server:
+  port: 8080
