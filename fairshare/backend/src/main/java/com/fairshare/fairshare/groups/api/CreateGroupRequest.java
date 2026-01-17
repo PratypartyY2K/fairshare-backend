@@ -1,10 +1,5 @@
-package com.fairshare.fairshare.groups;
+package com.fairshare.fairshare.groups.api;
 
-import org.springframework.data.jpa.repository.JpaRepository;
+import jakarta.validation.constraints.NotBlank;
 
-import java.util.List;
-
-public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> {
-    boolean existsByGroupIdAndUserId(Long groupId, Long userId);
-    List<GroupMember> findByGroupId(Long groupId);
-}
+public record CreateGroupRequest(@NotBlank String name) {}
