@@ -26,25 +26,29 @@ public class GroupService {
     }
 
     @Transactional
-    public void addMember(Long groupId, String userName) {
+    public com.fairshare.fairshare.groups.api.AddMemberResponse addMember(Long groupId, String userName) {
         Group group = groupRepo.findById(groupId)
-            .orElseThrow(() -> new IllegalArgumentException("Group not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Group not found"));
 
-        User user = userRepo.save(new User(userName.trim()));
+        String trimmed = userName.trim();
+        User user = userRepo.save(new User(trimmed));
+        
+        if (!memberRepo.existsByGroupIdAndUserId(group.getId(), user.getId())) {
+            memberRepo.save(new GroupMember(group, user));
+        }
 
-        if (memberRepo.existsByGroupIdAndUserId(group.getId(), user.getId())) return; // idempotent-ish
-
-        memberRepo.save(new GroupMember(group, user));
+        return new com.fairshare.fairshare.groups.api.AddMemberResponse(user.getId(), user.getName());
     }
+
 
     @Transactional
     public GroupResponse getGroup(Long groupId) {
         Group group = groupRepo.findById(groupId)
-            .orElseThrow(() -> new IllegalArgumentException("Group not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Group not found"));
 
         List<GroupResponse.MemberDto> members = memberRepo.findByGroupId(groupId).stream()
-            .map(m -> new GroupResponse.MemberDto(m.getUser().getId(), m.getUser().getName()))
-            .toList();
+                .map(m -> new GroupResponse.MemberDto(m.getUser().getId(), m.getUser().getName()))
+                .toList();
 
         return new GroupResponse(group.getId(), group.getName(), members);
     }
