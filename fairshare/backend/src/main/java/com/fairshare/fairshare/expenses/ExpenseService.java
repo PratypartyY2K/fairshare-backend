@@ -6,6 +6,7 @@ import com.fairshare.fairshare.expenses.api.LedgerResponse;
 import com.fairshare.fairshare.groups.GroupMemberRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
+import com.fairshare.fairshare.expenses.api.SettlementResponse;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -41,7 +42,7 @@ public class ExpenseService {
     ) {
         requireMember(groupId, payerUserId);
         for (Long uid : participantUserIds) requireMember(groupId, uid);
-        
+
         LinkedHashSet<Long> participants = new LinkedHashSet<>(participantUserIds);
         participants.add(payerUserId);
 
@@ -136,4 +137,21 @@ public class ExpenseService {
         }
         return out;
     }
+
+    @Transactional
+    public SettlementResponse getSettlements(Long groupId) {
+        var entries = ledgerRepo.findByGroupIdOrderByUserIdAsc(groupId);
+
+        Map<Long, java.math.BigDecimal> net = new java.util.LinkedHashMap<>();
+        for (var e : entries) {
+            net.put(e.getUserId(), e.getNetBalance());
+        }
+
+        var transfers = SettlementCalculator.compute(net).stream()
+                .map(t -> new SettlementResponse.Transfer(t.fromUserId(), t.toUserId(), t.amount()))
+                .toList();
+
+        return new SettlementResponse(transfers);
+    }
+
 }

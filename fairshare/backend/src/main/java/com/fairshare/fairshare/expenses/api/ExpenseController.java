@@ -32,4 +32,10 @@ public class ExpenseController {
     public List<ExpenseResponse> listExpenses(@PathVariable Long groupId) {
         return service.listExpenses(groupId);
     }
+
+    @GetMapping("/settlements")
+    public SettlementResponse settlements(@PathVariable Long groupId) {
+        return service.getSettlements(groupId);
+    }
+
 }
