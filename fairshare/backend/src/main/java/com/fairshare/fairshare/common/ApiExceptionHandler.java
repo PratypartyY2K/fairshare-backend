@@ -11,23 +11,24 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(NotFoundException.class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
-    public Map<String, String> notFound(NotFoundException ex) {
-        return Map.of("message", ex.getMessage());
+    public ApiError notFound(NotFoundException ex) {
+        return ApiError.of(ex.getMessage(), "NOT_FOUND");
     }
 
     @ExceptionHandler(BadRequestException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Map<String, String> badRequest(BadRequestException ex) {
-        return Map.of("message", ex.getMessage());
+    public ApiError badRequest(BadRequestException ex) {
+        return ApiError.of(ex.getMessage(), "BAD_REQUEST");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public Map<String, String> validation(MethodArgumentNotValidException ex) {
+    public ApiError validation(MethodArgumentNotValidException ex) {
         String msg = ex.getBindingResult().getFieldErrors().stream()
                 .findFirst()
                 .map(e -> e.getField() + " " + e.getDefaultMessage())
                 .orElse("Validation error");
-        return Map.of("message", msg);
+        return ApiError.of(msg, "VALIDATION_ERROR");
     }
+
 }
