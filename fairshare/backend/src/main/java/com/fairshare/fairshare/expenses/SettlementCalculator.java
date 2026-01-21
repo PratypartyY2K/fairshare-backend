@@ -24,8 +24,9 @@ public final class SettlementCalculator {
         }
 
         // Stable ordering: biggest amounts first helps reduce transactions
-        debtors.sort(Comparator.comparing((Map.Entry<Long, BigDecimal> e) -> e.getValue()).ascending()); // most negative first
-        creditors.sort(Comparator.comparing((Map.Entry<Long, BigDecimal> e) -> e.getValue()).reversed()); // most positive first
+        debtors.sort(Map.Entry.comparingByValue());                 // ascending
+        creditors.sort(Map.Entry.<Long, BigDecimal>comparingByValue().reversed()); // descending
+
 
         int i = 0, j = 0;
         List<Transfer> out = new ArrayList<>();
