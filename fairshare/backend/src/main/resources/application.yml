@@ -23,5 +23,9 @@ spring:
         exposure:
           include: health,info
 
+  springdoc:
+    swagger-ui:
+      path: /swagger
+
 server:
   port: 8080
