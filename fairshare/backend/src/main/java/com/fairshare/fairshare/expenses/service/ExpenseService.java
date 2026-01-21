@@ -4,6 +4,7 @@ import com.fairshare.fairshare.common.BadRequestException;
 import com.fairshare.fairshare.expenses.api.ExpenseResponse;
 import com.fairshare.fairshare.expenses.api.LedgerResponse;
 import com.fairshare.fairshare.groups.GroupMemberRepository;
+import com.fairshare.fairshare.expenses.model.ExpenseParticipant;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import com.fairshare.fairshare.expenses.api.SettlementResponse;
