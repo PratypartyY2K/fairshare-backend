@@ -77,7 +77,3 @@ Correct Core → Settlements → Fairness → UX
 ```
 
 Each layer must preserve correctness of the previous one.
-
----
-
-*End of architecture notes.*
