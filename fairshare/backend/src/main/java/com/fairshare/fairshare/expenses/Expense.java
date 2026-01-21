@@ -2,6 +2,7 @@ package com.fairshare.fairshare.expenses;
 
 import jakarta.persistence.*;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
@@ -21,7 +22,7 @@ public class Expense {
     private String description;
 
     @Column(nullable = false, precision = 12, scale = 2)
-    private java.math.BigDecimal amount;
+    private BigDecimal amount;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
@@ -29,7 +30,7 @@ public class Expense {
     protected Expense() {
     }
 
-    public Expense(Long groupId, Long payerUserId, String description, java.math.BigDecimal amount) {
+    public Expense(Long groupId, Long payerUserId, String description, BigDecimal amount) {
         this.groupId = groupId;
         this.payerUserId = payerUserId;
         this.description = description;
@@ -52,7 +53,7 @@ public class Expense {
         return description;
     }
 
-    public java.math.BigDecimal getAmount() {
+    public BigDecimal getAmount() {
         return amount;
     }
 

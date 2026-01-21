@@ -5,6 +5,8 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/groups/{groupId}")
 public class ExpenseController {
@@ -24,5 +26,10 @@ public class ExpenseController {
     @GetMapping("/ledger")
     public LedgerResponse ledger(@PathVariable Long groupId) {
         return service.getLedger(groupId);
+    }
+
+    @GetMapping("/expenses")
+    public List<ExpenseResponse> listExpenses(@PathVariable Long groupId) {
+        return service.listExpenses(groupId);
     }
 }

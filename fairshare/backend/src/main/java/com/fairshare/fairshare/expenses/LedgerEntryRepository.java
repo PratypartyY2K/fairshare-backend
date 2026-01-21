@@ -8,5 +8,5 @@ import java.util.Optional;
 public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> {
     Optional<LedgerEntry> findByGroupIdAndUserId(Long groupId, Long userId);
 
-    List<LedgerEntry> findByGroupId(Long groupId);
+    List<LedgerEntry> findByGroupIdOrderByUserIdAsc(Long groupId);
 }
