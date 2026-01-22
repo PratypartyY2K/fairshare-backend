@@ -29,7 +29,6 @@ public class GroupController {
         return service.addMember(groupId, req.userName());
     }
 
-
     @GetMapping("/{groupId}")
     public GroupResponse get(@PathVariable Long groupId) {
         return service.getGroup(groupId);
