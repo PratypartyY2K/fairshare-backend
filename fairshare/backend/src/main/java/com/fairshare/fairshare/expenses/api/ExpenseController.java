@@ -77,4 +77,9 @@ public class ExpenseController {
         service.confirmSettlements(groupId, req.getTransfers());
     }
 
+    @GetMapping("/owes")
+    public OwesResponse owes(@PathVariable Long groupId, @RequestParam Long fromUserId, @RequestParam Long toUserId) {
+        return new OwesResponse(service.amountOwed(groupId, fromUserId, toUserId));
+    }
+
 }

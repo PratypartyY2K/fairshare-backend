@@ -268,6 +268,23 @@ public class ExpenseService {
         }
     }
 
+    @Transactional
+    public BigDecimal amountOwed(Long groupId, Long fromUserId, Long toUserId) {
+        // Validate members
+        requireMember(groupId, fromUserId);
+        requireMember(groupId, toUserId);
+
+        // Compute settlements
+        SettlementResponse s = getSettlements(groupId);
+        BigDecimal total = BigDecimal.ZERO;
+        for (var t : s.transfers()) {
+            if (t.fromUserId().equals(fromUserId) && t.toUserId().equals(toUserId)) {
+                total = total.add(t.amount());
+            }
+        }
+        return total.setScale(2, RoundingMode.HALF_UP);
+    }
+
     private void requireMember(Long groupId, Long userId) {
         if (!groupMemberRepo.existsByGroupIdAndUserId(groupId, userId)) {
             throw new BadRequestException("User " + userId + " is not a member of group " + groupId);

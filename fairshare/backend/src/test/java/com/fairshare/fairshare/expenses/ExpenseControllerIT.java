@@ -84,12 +84,22 @@ public class ExpenseControllerIT {
         Long to = transfers.get(0).get("toUserId").asLong();
         BigDecimal amount = new BigDecimal(transfers.get(0).get("amount").asText());
 
+        // verify owes endpoint before confirm
+        mvc.perform(get(String.format("/groups/%d/owes?fromUserId=%d&toUserId=%d", gid, from, to)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.amount").value(amount.doubleValue()));
+
         var confirm = new ConfirmSettlementsRequest(List.of(new ConfirmSettlementsRequest.Transfer(from, to, amount)));
         // confirm settlements
         mvc.perform(post(String.format("/groups/%d/settlements/confirm", gid))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(confirm)))
                 .andExpect(status().isNoContent());
+
+        // owes should be zero after confirming
+        mvc.perform(get(String.format("/groups/%d/owes?fromUserId=%d&toUserId=%d", gid, from, to)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.amount").value(0.00));
 
         // ledger now should be all zeros or closer to zero
         mvc.perform(get(String.format("/groups/%d/ledger", gid)))
