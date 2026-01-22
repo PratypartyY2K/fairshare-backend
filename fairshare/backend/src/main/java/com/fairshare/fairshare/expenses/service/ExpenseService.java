@@ -5,6 +5,7 @@ import com.fairshare.fairshare.expenses.api.CreateExpenseRequest;
 import com.fairshare.fairshare.expenses.api.ExpenseResponse;
 import com.fairshare.fairshare.expenses.api.LedgerResponse;
 import com.fairshare.fairshare.groups.GroupMemberRepository;
+import com.fairshare.fairshare.expenses.model.ConfirmedTransfer;
 import com.fairshare.fairshare.expenses.model.ExpenseParticipant;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
@@ -21,17 +22,20 @@ public class ExpenseService {
     private final ExpenseParticipantRepository participantRepo;
     private final LedgerEntryRepository ledgerRepo;
     private final GroupMemberRepository groupMemberRepo;
+    private final ConfirmedTransferRepository confirmedTransferRepo;
 
     public ExpenseService(
             ExpenseRepository expenseRepo,
             ExpenseParticipantRepository participantRepo,
             LedgerEntryRepository ledgerRepo,
-            GroupMemberRepository groupMemberRepo
+            GroupMemberRepository groupMemberRepo,
+            ConfirmedTransferRepository confirmedTransferRepo
     ) {
         this.expenseRepo = expenseRepo;
         this.participantRepo = participantRepo;
         this.ledgerRepo = ledgerRepo;
         this.groupMemberRepo = groupMemberRepo;
+        this.confirmedTransferRepo = confirmedTransferRepo;
     }
 
     // Backwards-compatible legacy method delegates to the new request-based API
@@ -253,10 +257,6 @@ public class ExpenseService {
             requireMember(groupId, from);
             requireMember(groupId, to);
 
-            // subtract from debtor (fromUser): they paid the creditor, so their net balance increases (less negative)
-            // We represent net_balance = paid - owed. When a debtor transfers money to creditor, debtor's paid increases -> netBalance += amount
-            // Creditor received payment: they get paid back, so their paid decreases -> netBalance -= amount
-
             LedgerEntry fromEntry = ledger(groupId, from);
             LedgerEntry toEntry = ledger(groupId, to);
 
@@ -265,6 +265,10 @@ public class ExpenseService {
 
             ledgerRepo.save(fromEntry);
             ledgerRepo.save(toEntry);
+
+            // persist confirmed transfer for historical tracking
+            ConfirmedTransfer ct = new ConfirmedTransfer(groupId, from, to, t.getAmount());
+            confirmedTransferRepo.save(ct);
         }
     }
 
@@ -283,6 +287,22 @@ public class ExpenseService {
             }
         }
         return total.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    @Transactional
+    public BigDecimal amountOwedHistorical(Long groupId, Long fromUserId, Long toUserId) {
+        // Validate members
+        requireMember(groupId, fromUserId);
+        requireMember(groupId, toUserId);
+
+        // obligations: sum of share_amount where expense.payer = toUserId and participant = fromUserId
+        BigDecimal obligations = participantRepo.sumShareByGroupAndPayerAndUser(groupId, toUserId, fromUserId);
+
+        // payments: sum of confirmed transfers from fromUserId to toUserId
+        BigDecimal payments = confirmedTransferRepo.sumConfirmedAmount(groupId, fromUserId, toUserId);
+
+        BigDecimal outstanding = obligations.subtract(payments).setScale(2, RoundingMode.HALF_UP);
+        return outstanding;
     }
 
     private void requireMember(Long groupId, Long userId) {

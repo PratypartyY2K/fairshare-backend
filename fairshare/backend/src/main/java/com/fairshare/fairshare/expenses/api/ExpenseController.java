@@ -52,34 +52,72 @@ public class ExpenseController {
                     )
             )
     )
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Created", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ExpenseResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
+    })
     public ExpenseResponse createExpense(@PathVariable Long groupId, @Valid @RequestBody CreateExpenseRequest req) {
         return service.createExpense(groupId, req);
     }
 
     @GetMapping("/ledger")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get ledger for a group", description = "Returns net balances for each user in the group")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = LedgerResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
+    })
     public LedgerResponse ledger(@PathVariable Long groupId) {
         return service.getLedger(groupId);
     }
 
     @GetMapping("/expenses")
+    @io.swagger.v3.oas.annotations.Operation(summary = "List expenses for a group")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK")
     public List<ExpenseResponse> listExpenses(@PathVariable Long groupId) {
         return service.listExpenses(groupId);
     }
 
     @GetMapping("/settlements")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get settlement transfers for a group", description = "Returns suggested transfers to settle debts in the group")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = SettlementResponse.class)))
     public SettlementResponse settlements(@PathVariable Long groupId) {
         return service.getSettlements(groupId);
     }
 
     @PostMapping("/settlements/confirm")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @io.swagger.v3.oas.annotations.Operation(summary = "Confirm settlement transfers", description = "Apply a list of transfers to the ledger as confirmed payments")
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ConfirmSettlementsRequest.class)))
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No Content"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
+    })
     public void confirmSettlements(@PathVariable Long groupId, @Valid @RequestBody ConfirmSettlementsRequest req) {
         service.confirmSettlements(groupId, req.getTransfers());
     }
 
     @GetMapping("/owes")
+    @io.swagger.v3.oas.annotations.Operation(summary = "How much one user owes another", description = "Returns the amount that `fromUserId` should pay `toUserId` according to the current settlement suggestions")
+    @io.swagger.v3.oas.annotations.Parameter(name = "fromUserId", description = "User id who would pay", required = true)
+    @io.swagger.v3.oas.annotations.Parameter(name = "toUserId", description = "User id who would receive payment", required = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = OwesResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
+    })
     public OwesResponse owes(@PathVariable Long groupId, @RequestParam Long fromUserId, @RequestParam Long toUserId) {
         return new OwesResponse(service.amountOwed(groupId, fromUserId, toUserId));
+    }
+
+    @GetMapping("/owes/historical")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Historical owes (by expense/payment history)", description = "Computes how much fromUserId owes toUserId based on recorded expenses (where toUserId acted as payer) minus confirmed transfers from fromUserId to toUserId.")
+    @io.swagger.v3.oas.annotations.Parameter(name = "fromUserId", description = "User id who would pay", required = true)
+    @io.swagger.v3.oas.annotations.Parameter(name = "toUserId", description = "User id who would receive payment", required = true)
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = OwesResponse.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
+    })
+    public OwesResponse owesHistorical(@PathVariable Long groupId, @RequestParam Long fromUserId, @RequestParam Long toUserId) {
+        return new OwesResponse(service.amountOwedHistorical(groupId, fromUserId, toUserId));
     }
 
 }
