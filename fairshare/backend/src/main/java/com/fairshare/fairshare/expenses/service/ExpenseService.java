@@ -41,7 +41,17 @@ public class ExpenseService {
             Long payerUserId,
             List<Long> participantUserIds
     ) {
+        // If participants not provided, default to all group members
+        if (participantUserIds == null || participantUserIds.isEmpty()) {
+            participantUserIds = groupMemberRepo.findByGroupId(groupId).stream()
+                    .map(gm -> gm.getUser().getId())
+                    .toList();
+        }
+
         requireMember(groupId, payerUserId);
+        if (participantUserIds.isEmpty()) {
+            throw new BadRequestException("At least one participant is required");
+        }
         for (Long uid : participantUserIds) requireMember(groupId, uid);
 
         LinkedHashSet<Long> participants = new LinkedHashSet<>(participantUserIds);
@@ -108,6 +118,36 @@ public class ExpenseService {
                 expense.getCreatedAt(),
                 splits
         );
+    }
+
+    @Transactional
+    public void confirmSettlements(Long groupId, List<com.fairshare.fairshare.expenses.api.ConfirmSettlementsRequest.Transfer> transfers) {
+        if (transfers == null || transfers.isEmpty()) return;
+
+        // Validate transfers and apply them to ledger entries
+        for (var t : transfers) {
+            if (t.getAmount() == null || t.getAmount().signum() <= 0) {
+                throw new BadRequestException("Transfer amount must be positive");
+            }
+            Long from = t.getFromUserId();
+            Long to = t.getToUserId();
+            // membership validation
+            requireMember(groupId, from);
+            requireMember(groupId, to);
+
+            // subtract from debtor (fromUser): they paid the creditor, so their net balance increases (less negative)
+            // We represent net_balance = paid - owed. When a debtor transfers money to creditor, debtor's paid increases -> netBalance += amount
+            // Creditor received payment: they get paid back, so their paid decreases -> netBalance -= amount
+
+            LedgerEntry fromEntry = ledger(groupId, from);
+            LedgerEntry toEntry = ledger(groupId, to);
+
+            fromEntry.add(t.getAmount());
+            toEntry.add(t.getAmount().negate());
+
+            ledgerRepo.save(fromEntry);
+            ledgerRepo.save(toEntry);
+        }
     }
 
     private void requireMember(Long groupId, Long userId) {

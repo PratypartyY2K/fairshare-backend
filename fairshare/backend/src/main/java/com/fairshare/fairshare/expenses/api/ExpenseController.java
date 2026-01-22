@@ -38,4 +38,10 @@ public class ExpenseController {
         return service.getSettlements(groupId);
     }
 
+    @PostMapping("/settlements/confirm")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void confirmSettlements(@PathVariable Long groupId, @Valid @RequestBody ConfirmSettlementsRequest req) {
+        service.confirmSettlements(groupId, req.getTransfers());
+    }
+
 }
