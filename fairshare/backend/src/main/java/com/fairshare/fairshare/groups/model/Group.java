@@ -1,6 +1,7 @@
 package com.fairshare.fairshare.groups;
 
 import jakarta.persistence.*;
+
 import java.time.Instant;
 
 @Entity
@@ -16,11 +17,27 @@ public class Group {
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
-    protected Group() {}
+    protected Group() {
+    }
 
-    public Group(String name) { this.name = name; }
+    public Group(String name) {
+        this.name = name;
+    }
 
-    public Long getId() { return id; }
-    public String getName() { return name; }
-    public Instant getCreatedAt() { return createdAt; }
+    public Long getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    // Allow updating name when handling PATCH/update operations
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

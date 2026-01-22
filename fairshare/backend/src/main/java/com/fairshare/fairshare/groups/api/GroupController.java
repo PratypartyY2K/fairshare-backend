@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import com.fairshare.fairshare.groups.api.dto.GroupResponse;
+import com.fairshare.fairshare.groups.api.dto.GroupUpdateRequest;
 
 import java.util.List;
 
@@ -40,6 +41,11 @@ public class GroupController {
     @GetMapping
     public List<GroupResponse> list() {
         return service.listGroups();
+    }
+
+    @PatchMapping("/{groupId}")
+    public GroupResponse patchName(@PathVariable Long groupId, @RequestBody @Valid GroupUpdateRequest req) {
+        return service.updateGroupName(groupId, req.getName());
     }
 
 }

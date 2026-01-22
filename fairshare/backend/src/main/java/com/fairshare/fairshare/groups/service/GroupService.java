@@ -54,6 +54,26 @@ public class GroupService {
         return new GroupResponse(group.getId(), group.getName(), members);
     }
 
+    @Transactional
+    public GroupResponse updateGroupName(Long groupId, String newName) {
+        Group group = groupRepo.findById(groupId)
+                .orElseThrow(() -> new IllegalArgumentException("Group not found"));
+
+        String trimmed = newName == null ? "" : newName.trim();
+        if (trimmed.isBlank()) {
+            throw new IllegalArgumentException("Group name must not be blank");
+        }
+
+        group.setName(trimmed);
+        Group saved = groupRepo.save(group);
+
+        List<MemberResponse> members = memberRepo.findByGroupId(groupId).stream()
+                .map(m -> new MemberResponse(m.getUser().getId(), m.getUser().getName()))
+                .toList();
+
+        return new GroupResponse(saved.getId(), saved.getName(), members);
+    }
+
     public List<GroupResponse> listGroups() {
         return groupRepo.findAll().stream()
                 .map(g -> new GroupResponse(
