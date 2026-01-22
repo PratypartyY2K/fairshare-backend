@@ -1,6 +1,7 @@
 package com.fairshare.fairshare.expenses;
 
 import com.fairshare.fairshare.common.BadRequestException;
+import com.fairshare.fairshare.expenses.api.CreateExpenseRequest;
 import com.fairshare.fairshare.expenses.api.ExpenseResponse;
 import com.fairshare.fairshare.expenses.api.LedgerResponse;
 import com.fairshare.fairshare.groups.GroupMemberRepository;
@@ -33,6 +34,7 @@ public class ExpenseService {
         this.groupMemberRepo = groupMemberRepo;
     }
 
+    // Backwards-compatible legacy method delegates to the new request-based API
     @Transactional
     public ExpenseResponse createExpense(
             Long groupId,
@@ -41,44 +43,160 @@ public class ExpenseService {
             Long payerUserId,
             List<Long> participantUserIds
     ) {
-        // If participants not provided, default to all group members
+        CreateExpenseRequest req = new CreateExpenseRequest(description, amount, payerUserId, participantUserIds);
+        return createExpense(groupId, req);
+    }
+
+    @Transactional
+    public ExpenseResponse createExpense(Long groupId, CreateExpenseRequest req) {
+        // participants
+        List<Long> participantUserIds = req.participantUserIds();
         if (participantUserIds == null || participantUserIds.isEmpty()) {
             participantUserIds = groupMemberRepo.findByGroupId(groupId).stream()
                     .map(gm -> gm.getUser().getId())
                     .toList();
         }
 
-        requireMember(groupId, payerUserId);
-        if (participantUserIds.isEmpty()) {
-            throw new BadRequestException("At least one participant is required");
+        // validator: participants unique
+        LinkedHashSet<Long> uniq = new LinkedHashSet<>(participantUserIds);
+        if (uniq.size() != participantUserIds.size()) {
+            throw new BadRequestException("Participants must be unique");
         }
+
+        // ensure payer and participants are members
+        Long payer = req.payerUserId();
+        requireMember(groupId, payer);
         for (Long uid : participantUserIds) requireMember(groupId, uid);
 
+        // ensure participants includes payer (will be added later)
         LinkedHashSet<Long> participants = new LinkedHashSet<>(participantUserIds);
-        participants.add(payerUserId);
+        participants.add(payer);
 
-        if (participants.isEmpty()) {
-            throw new BadRequestException("At least one participant is required");
-        }
+        if (participants.isEmpty()) throw new BadRequestException("At least one participant is required");
 
         List<Long> ids = new ArrayList<>(participants);
-        Map<Long, BigDecimal> shares = equalSplit(amount, ids);
 
-        Expense expense = expenseRepo.save(new Expense(groupId, payerUserId, description.trim(), amount));
+        // Determine shares mapping based on requested split mode
+        Map<Long, BigDecimal> sharesMap = null;
 
-        for (var e : shares.entrySet()) {
+        // Mode precedence: exactAmounts > percentages > shares > equal
+        if (req.getExactAmounts() != null) {
+            var exact = req.getExactAmounts();
+            if (exact.size() != participantUserIds.size()) {
+                throw new BadRequestException("exactAmounts length must match participantUserIds length");
+            }
+            // map each participantUserIds order to exact amount, then include payer if not present
+            Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
+            for (int i = 0; i < participantUserIds.size(); i++) {
+                tmp.put(participantUserIds.get(i), exact.get(i).setScale(2, RoundingMode.HALF_UP));
+            }
+            // if payer wasn't in participantUserIds, add their share as 0 (they'll be included in participants list later)
+            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO);
+
+            // validation: all positive (>= 0) and sum to amount within tolerance 0.01
+            BigDecimal sum = tmp.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal tol = new BigDecimal("0.01");
+            if (sum.subtract(req.amount()).abs().compareTo(tol) > 0) {
+                throw new BadRequestException("Exact amounts must sum to total amount within $0.01 tolerance");
+            }
+
+            // If there is minor rounding difference, adjust by distributing leftover cents stably
+            sharesMap = distributeLeftover(tmp, req.amount());
+
+        } else if (req.getPercentages() != null) {
+            var pct = req.getPercentages();
+            if (pct.size() != participantUserIds.size()) {
+                throw new BadRequestException("percentages length must match participantUserIds length");
+            }
+            BigDecimal sumPct = pct.stream().reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal pctTol = new BigDecimal("0.01");
+            if (sumPct.subtract(new BigDecimal("100")).abs().compareTo(pctTol) > 0) {
+                throw new BadRequestException("Percentages must sum to 100% within 0.01 tolerance");
+            }
+
+            Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
+            for (int i = 0; i < participantUserIds.size(); i++) {
+                BigDecimal share = req.amount().multiply(pct.get(i)).divide(new BigDecimal("100"));
+                tmp.put(participantUserIds.get(i), share.setScale(2, RoundingMode.DOWN)); // floor to 2 decimals
+            }
+
+            // ensure payer present
+            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO);
+
+            sharesMap = distributeLeftover(tmp, req.amount());
+
+        } else if (req.getShares() != null) {
+            var s = req.getShares();
+            if (s.size() != participantUserIds.size()) {
+                throw new BadRequestException("shares length must match participantUserIds length");
+            }
+            int total = s.stream().mapToInt(Integer::intValue).sum();
+            if (total <= 0) throw new BadRequestException("Sum of shares must be positive");
+
+            Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
+            for (int i = 0; i < participantUserIds.size(); i++) {
+                BigDecimal fraction = new BigDecimal(s.get(i)).divide(new BigDecimal(total), 10, RoundingMode.HALF_UP);
+                BigDecimal share = req.amount().multiply(fraction).setScale(2, RoundingMode.DOWN);
+                tmp.put(participantUserIds.get(i), share);
+            }
+            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO);
+            sharesMap = distributeLeftover(tmp, req.amount());
+
+        } else {
+            // equal split
+            sharesMap = equalSplit(req.amount(), ids);
+        }
+
+        // Save expense
+        Expense expense = expenseRepo.save(new Expense(groupId, payer, req.description().trim(), req.amount()));
+
+        for (var e : sharesMap.entrySet()) {
             participantRepo.save(new ExpenseParticipant(expense.getId(), e.getKey(), e.getValue()));
         }
 
-        // Ledger:
-        // payer paid the full amount (+amount)
-        ledger(groupId, payerUserId).add(amount);
-        // everyone owes their share (-share)
-        for (var e : shares.entrySet()) {
+        // Ledger updates
+        ledger(groupId, payer).add(req.amount());
+        for (var e : sharesMap.entrySet()) {
             ledger(groupId, e.getKey()).add(e.getValue().negate());
         }
 
-        return toExpenseResponse(expense, shares);
+        return toExpenseResponse(expense, sharesMap);
+    }
+
+    /**
+     * Distribute leftover cents so that the final rounded sums equal totalAmount.
+     * tmpMap is mapping from userId->floor(amount to 2 decimals) or possibly exact set
+     */
+    private Map<Long, BigDecimal> distributeLeftover(Map<Long, BigDecimal> tmpMap, BigDecimal totalAmount) {
+        // Work on a linked map to preserve insertion order (participantUserIds order), but requirement asks to distribute by userId ascending
+        // We'll create a list sorted by userId ascending as requested
+        List<Map.Entry<Long, BigDecimal>> entries = new ArrayList<>(tmpMap.entrySet());
+        entries.sort(Map.Entry.comparingByKey());
+
+        BigDecimal sum = entries.stream().map(Map.Entry::getValue).reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal diff = totalAmount.setScale(2, RoundingMode.HALF_UP).subtract(sum).setScale(2, RoundingMode.HALF_UP);
+
+        int cents = diff.movePointRight(2).intValueExact(); // may be negative or positive
+
+        Map<Long, BigDecimal> out = new LinkedHashMap<>();
+        for (Map.Entry<Long, BigDecimal> e : entries) out.put(e.getKey(), e.getValue());
+
+        int i = 0;
+        int n = entries.size();
+        while (cents > 0) {
+            Long id = entries.get(i % n).getKey();
+            out.put(id, out.get(id).add(new BigDecimal("0.01")));
+            i++;
+            cents--;
+        }
+        while (cents < 0) {
+            Long id = entries.get(i % n).getKey();
+            out.put(id, out.get(id).subtract(new BigDecimal("0.01")));
+            i++;
+            cents++;
+        }
+
+        return out;
     }
 
     @Transactional
