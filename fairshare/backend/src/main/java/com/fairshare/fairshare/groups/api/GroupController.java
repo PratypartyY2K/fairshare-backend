@@ -5,6 +5,9 @@ import com.fairshare.fairshare.groups.GroupService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import com.fairshare.fairshare.groups.api.dto.GroupResponse;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/groups")
@@ -33,4 +36,10 @@ public class GroupController {
     public GroupResponse get(@PathVariable Long groupId) {
         return service.getGroup(groupId);
     }
+
+    @GetMapping
+    public List<GroupResponse> list() {
+        return service.listGroups();
+    }
+
 }

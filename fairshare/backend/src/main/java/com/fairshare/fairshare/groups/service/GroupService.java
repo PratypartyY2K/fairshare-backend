@@ -1,6 +1,7 @@
 package com.fairshare.fairshare.groups;
 
-import com.fairshare.fairshare.groups.api.GroupResponse;
+import com.fairshare.fairshare.groups.api.dto.GroupResponse;
+import com.fairshare.fairshare.groups.api.dto.MemberResponse;
 import com.fairshare.fairshare.users.User;
 import com.fairshare.fairshare.users.UserRepository;
 import jakarta.transaction.Transactional;
@@ -32,7 +33,7 @@ public class GroupService {
 
         String trimmed = userName.trim();
         User user = userRepo.save(new User(trimmed));
-        
+
         if (!memberRepo.existsByGroupIdAndUserId(group.getId(), user.getId())) {
             memberRepo.save(new GroupMember(group, user));
         }
@@ -46,10 +47,27 @@ public class GroupService {
         Group group = groupRepo.findById(groupId)
                 .orElseThrow(() -> new IllegalArgumentException("Group not found"));
 
-        List<GroupResponse.MemberDto> members = memberRepo.findByGroupId(groupId).stream()
-                .map(m -> new GroupResponse.MemberDto(m.getUser().getId(), m.getUser().getName()))
+        List<MemberResponse> members = memberRepo.findByGroupId(groupId).stream()
+                .map(gm -> new MemberResponse(gm.getUser().getId(), gm.getUser().getName()))
                 .toList();
 
         return new GroupResponse(group.getId(), group.getName(), members);
     }
+
+    public List<GroupResponse> listGroups() {
+        return groupRepo.findAll().stream()
+                .map(g -> new GroupResponse(
+                        g.getId(),
+                        g.getName(),
+                        listMembersForGroup(g.getId())
+                ))
+                .toList();
+    }
+
+    private List<MemberResponse> listMembersForGroup(Long groupId) {
+        return memberRepo.findByGroupId(groupId).stream()
+                .map(gm -> new MemberResponse(gm.getUser().getId(), gm.getUser().getName()))
+                .toList();
+    }
+
 }

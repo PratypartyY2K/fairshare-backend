@@ -1,7 +1,6 @@
-package com.fairshare.fairshare.groups.api;
+package com.fairshare.fairshare.groups.api.dto;
 
 import java.util.List;
 
-public record GroupResponse(Long id, String name, List<MemberDto> members) {
-    public record MemberDto(Long id, String name) {}
+public record GroupResponse(Long id, String name, List<MemberResponse> members) {
 }
