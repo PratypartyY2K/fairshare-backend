@@ -97,7 +97,7 @@ public class ExpenseController {
     }
 
     @GetMapping("/owes")
-    @io.swagger.v3.oas.annotations.Operation(summary = "How much one user owes another", description = "Returns the amount that `fromUserId` should pay `toUserId` according to the current settlement suggestions")
+    @io.swagger.v3.oas.annotations.Operation(summary = "How much one user owes another", description = "Returns the amount that `fromUserId` should pay `toUserId` based on recorded expense/payment history (obligations minus confirmed transfers)")
     @io.swagger.v3.oas.annotations.Parameter(name = "fromUserId", description = "User id who would pay", required = true)
     @io.swagger.v3.oas.annotations.Parameter(name = "toUserId", description = "User id who would receive payment", required = true)
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
@@ -105,7 +105,7 @@ public class ExpenseController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
     public OwesResponse owes(@PathVariable Long groupId, @RequestParam Long fromUserId, @RequestParam Long toUserId) {
-        return new OwesResponse(service.amountOwed(groupId, fromUserId, toUserId));
+        return new OwesResponse(service.amountOwedHistorical(groupId, fromUserId, toUserId));
     }
 
     @GetMapping("/owes/historical")

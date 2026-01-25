@@ -1,6 +1,7 @@
 package com.fairshare.fairshare.expenses.api;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.*;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -28,7 +29,8 @@ public class CreateExpenseRequest {
     private BigDecimal amount;
 
     @NotNull
-    @JsonAlias({"paidByUserId", "payerUserId"})
+    @JsonProperty("payerUserId")
+    @JsonAlias("paidByUserId")
     @Schema(description = "User id who paid the expense (JSON allows 'paidByUserId' or 'payerUserId')", example = "10")
     private Long payerUserId;
 
