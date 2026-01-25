@@ -50,14 +50,17 @@ public class ExpenseController {
                                     )
                             }
                     )
-            )
+            ),
+            parameters = {
+                    @io.swagger.v3.oas.annotations.Parameter(name = "Idempotency-Key", in = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER, description = "Idempotency key to make create expense requests safe to retry", required = false)
+            }
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Created", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ExpenseResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
-    public ExpenseResponse createExpense(@PathVariable Long groupId, @Valid @RequestBody CreateExpenseRequest req) {
-        return service.createExpense(groupId, req);
+    public ExpenseResponse createExpense(@PathVariable Long groupId, @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey, @Valid @RequestBody CreateExpenseRequest req) {
+        return service.createExpense(groupId, req, idempotencyKey);
     }
 
     @GetMapping("/ledger")

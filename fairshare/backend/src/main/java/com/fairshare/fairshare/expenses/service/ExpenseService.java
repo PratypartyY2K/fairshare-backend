@@ -61,6 +61,25 @@ public class ExpenseService {
 
     @Transactional
     public ExpenseResponse createExpense(Long groupId, CreateExpenseRequest req) {
+        return createExpense(groupId, req, null);
+    }
+
+    @Transactional
+    public ExpenseResponse createExpense(Long groupId, CreateExpenseRequest req, String idempotencyKey) {
+        // If idempotency key provided, return existing expense if one was already created for this group+key
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            var existing = expenseRepo.findByGroupIdAndIdempotencyKey(groupId, idempotencyKey);
+            if (existing.isPresent()) {
+                Expense ex = existing.get();
+                // rebuild shares map from participantRepo
+                Map<Long, BigDecimal> shares = new LinkedHashMap<>();
+                for (ExpenseParticipant p : participantRepo.findByExpenseId(ex.getId())) {
+                    shares.put(p.getUserId(), p.getShareAmount());
+                }
+                return toExpenseResponse(ex, shares);
+            }
+        }
+
         // normalize and validate total amount (currency contract: scale 2, HALF_UP)
         if (req.amount() == null) throw new BadRequestException("Amount must be provided");
         BigDecimal totalAmount = normalizeCurrency(req.amount());
@@ -164,8 +183,13 @@ public class ExpenseService {
             sharesMap = equalSplit(totalAmount, ids);
         }
 
-        // Save expense
-        Expense expense = expenseRepo.save(new Expense(groupId, payer, req.description().trim(), totalAmount));
+        // Save expense (use idempotencyKey-aware constructor if provided)
+        Expense expense;
+        if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+            expense = expenseRepo.save(new Expense(groupId, payer, req.description().trim(), totalAmount, idempotencyKey));
+        } else {
+            expense = expenseRepo.save(new Expense(groupId, payer, req.description().trim(), totalAmount));
+        }
 
         for (var e : sharesMap.entrySet()) {
             // ensure stored shares are scale-2

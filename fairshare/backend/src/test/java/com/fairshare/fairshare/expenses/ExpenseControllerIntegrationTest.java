@@ -133,4 +133,66 @@ public class ExpenseControllerIntegrationTest {
             assertThat(v.scale()).isEqualTo(2);
         }
     }
+
+    @Test
+    @DisplayName("Idempotent create expense with same Idempotency-Key")
+    void idempotentCreateExpense() throws Exception {
+        // create group
+        String group = "{\"name\":\"IdemGroup\"}";
+        String gresp = mvc.perform(post("/groups")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(group))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode gnode = mapper.readTree(gresp);
+        Long gid = gnode.get("id").asLong();
+
+        // add two members
+        String m1 = "{\"userName\":\"alice\"}";
+        String r1 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        Long aliceId = mapper.readTree(r1).get("userId").asLong();
+
+        String m2 = "{\"userName\":\"bob\"}";
+        String r2 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        Long bobId = mapper.readTree(r2).get("userId").asLong();
+
+        String key = "test-idempotency-123";
+        String expBody = String.format("{\"description\":\"Coffee\",\"amount\":5.00,\"paidByUserId\":%d}", aliceId);
+
+        // First POST
+        String first = mvc.perform(post("/groups/" + gid + "/expenses")
+                        .header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(expBody))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode firstNode = mapper.readTree(first);
+        Long firstId = firstNode.get("expenseId").asLong();
+
+        // Second POST with same key
+        String second = mvc.perform(post("/groups/" + gid + "/expenses")
+                        .header("Idempotency-Key", key)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(expBody))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode secondNode = mapper.readTree(second);
+        Long secondId = secondNode.get("expenseId").asLong();
+
+        // IDs should match (same resource returned)
+        assertThat(firstId).isEqualTo(secondId);
+
+        // Ensure only one expense exists for the group
+        String list = mvc.perform(get("/groups/" + gid + "/expenses"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode arr = mapper.readTree(list);
+        int count = 0;
+        for (JsonNode e : arr) {
+            if (e.get("expenseId").asLong() == firstId) count++;
+        }
+        assertThat(count).isEqualTo(1);
+    }
 }

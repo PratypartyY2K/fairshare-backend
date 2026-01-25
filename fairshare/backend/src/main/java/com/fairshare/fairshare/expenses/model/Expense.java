@@ -27,6 +27,9 @@ public class Expense {
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
+
     protected Expense() {
     }
 
@@ -35,6 +38,14 @@ public class Expense {
         this.payerUserId = payerUserId;
         this.description = description;
         this.amount = amount;
+    }
+
+    public Expense(Long groupId, Long payerUserId, String description, BigDecimal amount, String idempotencyKey) {
+        this.groupId = groupId;
+        this.payerUserId = payerUserId;
+        this.description = description;
+        this.amount = amount;
+        this.idempotencyKey = idempotencyKey;
     }
 
     public Long getId() {
@@ -59,5 +70,9 @@ public class Expense {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
     }
 }
