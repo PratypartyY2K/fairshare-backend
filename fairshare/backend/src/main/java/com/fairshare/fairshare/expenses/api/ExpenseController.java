@@ -93,12 +93,25 @@ public class ExpenseController {
     @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ConfirmSettlementsRequest.class), examples = {
             @io.swagger.v3.oas.annotations.media.ExampleObject(name = "ConfirmWithId", summary = "Confirm with confirmationId for idempotency", value = "{\"confirmationId\":\"confirm-abc-123\",\"transfers\":[{\"fromUserId\":1,\"toUserId\":2,\"amount\":10.00}]}")
     }))
+    @io.swagger.v3.oas.annotations.Parameter(name = "Confirmation-Id", in = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER, description = "Optional confirmation id (UUID) to make confirmations idempotent; if provided it overrides the body confirmationId when body lacks one", required = false)
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No Content"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
-    public void confirmSettlements(@PathVariable Long groupId, @Valid @RequestBody ConfirmSettlementsRequest req) {
+    public void confirmSettlements(@PathVariable Long groupId, @RequestHeader(value = "Confirmation-Id", required = false) String confirmationIdHeader, @Valid @RequestBody ConfirmSettlementsRequest req) {
+        // If header provided and request body has no confirmationId, use the header
+        if ((req.getConfirmationId() == null || req.getConfirmationId().isBlank()) && confirmationIdHeader != null && !confirmationIdHeader.isBlank()) {
+            req.setConfirmationId(confirmationIdHeader);
+        }
         service.confirmSettlements(groupId, req);
+    }
+
+    @GetMapping("/confirmation-id")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Generate a confirmation id (UUID)", description = "Return a fresh confirmation id to be used by the client when confirming settlements; handy for a 'Generate ID' button")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK")
+    public java.util.Map<String, String> generateConfirmationId(@PathVariable Long groupId) {
+        String id = java.util.UUID.randomUUID().toString();
+        return java.util.Collections.singletonMap("confirmationId", id);
     }
 
     @GetMapping("/owes")

@@ -66,5 +66,25 @@ public class ConfirmSettlementsIntegrationTest {
 
         // ensure only one confirmed transfer persisted with this confirmation id (query the confirmed transfers list endpoint not present; we can try creating a new confirmation with different id and see ledger changes differ)
         // For now, just assert idempotency via ledger amounts above.
+
+        // Use header-based confirmation flow
+        String confirmationIdHeader = "confirm-header-123";
+        String bodyNoId = String.format("{\"transfers\":[{\"fromUserId\":%d,\"toUserId\":%d,\"amount\":5.00}]}", x, y);
+
+        // first confirm using header
+        mvc.perform(post("/groups/" + gid + "/settlements/confirm").header("Confirmation-Id", confirmationIdHeader).contentType(MediaType.APPLICATION_JSON).content(bodyNoId))
+                .andExpect(status().isNoContent());
+
+        String owes1Header = mvc.perform(get("/groups/" + gid + "/owes/historical?fromUserId=" + x + "&toUserId=" + y)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        BigDecimal amt1Header = mapper.readTree(owes1Header).get("amount").decimalValue();
+
+        // second confirm with same header should be idempotent
+        mvc.perform(post("/groups/" + gid + "/settlements/confirm").header("Confirmation-Id", confirmationIdHeader).contentType(MediaType.APPLICATION_JSON).content(bodyNoId))
+                .andExpect(status().isNoContent());
+
+        String owes2Header = mvc.perform(get("/groups/" + gid + "/owes/historical?fromUserId=" + x + "&toUserId=" + y)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        BigDecimal amt2Header = mapper.readTree(owes2Header).get("amount").decimalValue();
+
+        assertThat(amt2Header).isEqualByComparingTo(amt1Header);
     }
 }
