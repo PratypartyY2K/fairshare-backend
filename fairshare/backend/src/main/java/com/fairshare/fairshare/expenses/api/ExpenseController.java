@@ -96,7 +96,7 @@ public class ExpenseController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
     public void confirmSettlements(@PathVariable Long groupId, @Valid @RequestBody ConfirmSettlementsRequest req) {
-        service.confirmSettlements(groupId, req.getTransfers());
+        service.confirmSettlements(groupId, req);
     }
 
     @GetMapping("/owes")

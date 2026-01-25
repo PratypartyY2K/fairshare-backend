@@ -7,6 +7,8 @@ import java.math.BigDecimal;
 import java.util.List;
 
 public class ConfirmSettlementsRequest {
+    private String confirmationId;
+
     @NotNull
     private List<Transfer> transfers;
 
@@ -15,6 +17,14 @@ public class ConfirmSettlementsRequest {
 
     public ConfirmSettlementsRequest(List<Transfer> transfers) {
         this.transfers = transfers;
+    }
+
+    public String getConfirmationId() {
+        return confirmationId;
+    }
+
+    public void setConfirmationId(String confirmationId) {
+        this.confirmationId = confirmationId;
     }
 
     public List<Transfer> getTransfers() {

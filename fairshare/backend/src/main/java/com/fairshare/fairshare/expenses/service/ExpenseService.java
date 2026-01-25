@@ -12,6 +12,7 @@ import com.fairshare.fairshare.expenses.model.ExpenseParticipant;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import com.fairshare.fairshare.expenses.api.SettlementResponse;
+import com.fairshare.fairshare.expenses.api.ConfirmSettlementsRequest;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -304,11 +305,16 @@ public class ExpenseService {
     }
 
     @Transactional
-    public void confirmSettlements(Long groupId, List<com.fairshare.fairshare.expenses.api.ConfirmSettlementsRequest.Transfer> transfers) {
-        if (transfers == null || transfers.isEmpty()) return;
+    public void confirmSettlements(Long groupId, ConfirmSettlementsRequest req) {
+        if (req == null || req.getTransfers() == null || req.getTransfers().isEmpty()) return;
 
-        // Validate transfers and apply them to ledger entries
-        for (var t : transfers) {
+        String confirmationId = req.getConfirmationId();
+        if (confirmationId != null && !confirmationId.isBlank()) {
+            var existing = confirmedTransferRepo.findByGroupIdAndConfirmationId(groupId, confirmationId);
+            if (existing.isPresent()) return; // idempotent: already processed
+        }
+
+        for (var t : req.getTransfers()) {
             if (t.getAmount() == null || t.getAmount().signum() <= 0) {
                 throw new BadRequestException("Transfer amount must be positive");
             }
@@ -330,8 +336,10 @@ public class ExpenseService {
             ledgerRepo.save(fromEntry);
             ledgerRepo.save(toEntry);
 
-            // persist confirmed transfer for historical tracking (store normalized amount)
-            ConfirmedTransfer ct = new ConfirmedTransfer(groupId, from, to, amt);
+            // persist confirmed transfer for historical tracking (store normalized amount + confirmation id if provided)
+            ConfirmedTransfer ct = (confirmationId != null && !confirmationId.isBlank())
+                    ? new ConfirmedTransfer(groupId, from, to, amt, confirmationId)
+                    : new ConfirmedTransfer(groupId, from, to, amt);
             confirmedTransferRepo.save(ct);
         }
     }
