@@ -11,6 +11,8 @@ import java.util.List;
 public interface ExpenseParticipantRepository extends JpaRepository<ExpenseParticipant, Long> {
     List<ExpenseParticipant> findByExpenseId(Long expenseId);
 
+    void deleteByExpenseIdAndUserId(Long expenseId, Long userId);
+
     @Query("select coalesce(sum(p.shareAmount), 0) from ExpenseParticipant p join Expense e on p.expenseId = e.id where e.groupId = :groupId and e.payerUserId = :payer and p.userId = :user")
     BigDecimal sumShareByGroupAndPayerAndUser(@Param("groupId") Long groupId, @Param("payer") Long payerUserId, @Param("user") Long participantUserId);
 }

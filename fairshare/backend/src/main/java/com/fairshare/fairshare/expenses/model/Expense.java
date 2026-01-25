@@ -30,6 +30,9 @@ public class Expense {
     @Column(name = "idempotency_key", length = 128)
     private String idempotencyKey;
 
+    @Column(name = "voided")
+    private Boolean voided;
+
     protected Expense() {
     }
 
@@ -64,8 +67,24 @@ public class Expense {
         return description;
     }
 
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public boolean isVoided() {
+        return Boolean.TRUE.equals(voided);
+    }
+
+    public void setVoided(boolean voided) {
+        this.voided = voided;
+    }
+
     public BigDecimal getAmount() {
         return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
     }
 
     public Instant getCreatedAt() {
