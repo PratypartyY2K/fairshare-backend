@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 public interface ConfirmedTransferRepository extends JpaRepository<ConfirmedTransfer, Long> {
@@ -13,4 +14,8 @@ public interface ConfirmedTransferRepository extends JpaRepository<ConfirmedTran
     BigDecimal sumConfirmedAmount(@Param("groupId") Long groupId, @Param("from") Long fromUserId, @Param("to") Long toUserId);
 
     Optional<ConfirmedTransfer> findByGroupIdAndConfirmationId(Long groupId, String confirmationId);
+
+    List<ConfirmedTransfer> findByGroupIdOrderByCreatedAtDesc(Long groupId);
+
+    List<ConfirmedTransfer> findByGroupIdAndConfirmationIdOrderByCreatedAtDesc(Long groupId, String confirmationId);
 }

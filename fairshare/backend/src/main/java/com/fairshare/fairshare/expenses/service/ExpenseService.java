@@ -564,4 +564,26 @@ public class ExpenseService {
         String payload = String.format("{\"expenseId\":%d,\"amount\":%s}", expenseId, total.toString());
         eventRepo.save(new ExpenseEvent(groupId, expenseId, "ExpenseVoided", payload));
     }
+
+    @Transactional
+    public java.util.List<com.fairshare.fairshare.expenses.api.EventResponse> listEvents(Long groupId) {
+        var evts = eventRepo.findByGroupIdOrderByCreatedAtDesc(groupId);
+        var out = new ArrayList<com.fairshare.fairshare.expenses.api.EventResponse>();
+        for (var e : evts) {
+            out.add(new com.fairshare.fairshare.expenses.api.EventResponse(e.getId(), e.getGroupId(), e.getExpenseId(), e.getEventType(), e.getPayload(), e.getCreatedAt()));
+        }
+        return out;
+    }
+
+    @Transactional
+    public java.util.List<com.fairshare.fairshare.expenses.api.ConfirmedTransferResponse> listConfirmedTransfers(Long groupId, String confirmationId) {
+        var rows = (confirmationId == null || confirmationId.isBlank())
+                ? confirmedTransferRepo.findByGroupIdOrderByCreatedAtDesc(groupId)
+                : confirmedTransferRepo.findByGroupIdAndConfirmationIdOrderByCreatedAtDesc(groupId, confirmationId);
+        var out = new ArrayList<com.fairshare.fairshare.expenses.api.ConfirmedTransferResponse>();
+        for (var ct : rows) {
+            out.add(new com.fairshare.fairshare.expenses.api.ConfirmedTransferResponse(ct.getId(), ct.getGroupId(), ct.getFromUserId(), ct.getToUserId(), ct.getAmount(), ct.getConfirmationId(), ct.getCreatedAt()));
+        }
+        return out;
+    }
 }

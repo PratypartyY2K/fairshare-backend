@@ -90,7 +90,9 @@ public class ExpenseController {
     @PostMapping("/settlements/confirm")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @io.swagger.v3.oas.annotations.Operation(summary = "Confirm settlement transfers", description = "Apply a list of transfers to the ledger as confirmed payments")
-    @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ConfirmSettlementsRequest.class)))
+    @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ConfirmSettlementsRequest.class), examples = {
+            @io.swagger.v3.oas.annotations.media.ExampleObject(name = "ConfirmWithId", summary = "Confirm with confirmationId for idempotency", value = "{\"confirmationId\":\"confirm-abc-123\",\"transfers\":[{\"fromUserId\":1,\"toUserId\":2,\"amount\":10.00}]}")
+    }))
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No Content"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
@@ -144,6 +146,18 @@ public class ExpenseController {
     })
     public void voidExpense(@PathVariable Long groupId, @PathVariable Long expenseId) {
         service.voidExpense(groupId, expenseId);
+    }
+
+    @GetMapping("/events")
+    @io.swagger.v3.oas.annotations.Operation(summary = "List expense events for a group", description = "Return the event log (ExpenseCreated, ExpenseUpdated, ExpenseVoided, etc.) for auditing")
+    public java.util.List<com.fairshare.fairshare.expenses.api.EventResponse> events(@PathVariable Long groupId) {
+        return service.listEvents(groupId);
+    }
+
+    @GetMapping("/confirmed-transfers")
+    @io.swagger.v3.oas.annotations.Operation(summary = "List confirmed transfers for a group", description = "Return confirmed transfers; optionally filter by confirmationId for idempotency lookup")
+    public java.util.List<com.fairshare.fairshare.expenses.api.ConfirmedTransferResponse> confirmedTransfers(@PathVariable Long groupId, @RequestParam(required = false) String confirmationId) {
+        return service.listConfirmedTransfers(groupId, confirmationId);
     }
 
 }
