@@ -38,6 +38,14 @@ public class ExpenseService {
         this.confirmedTransferRepo = confirmedTransferRepo;
     }
 
+    // Currency normalization helper: enforce scale=2 and HALF_UP rounding, non-null, non-negative
+    private static BigDecimal normalizeCurrency(BigDecimal v) {
+        if (v == null) throw new IllegalArgumentException("Amount cannot be null");
+        BigDecimal norm = v.setScale(2, RoundingMode.HALF_UP);
+        if (norm.compareTo(BigDecimal.ZERO) < 0) throw new IllegalArgumentException("Amount must be non-negative");
+        return norm;
+    }
+
     // Backwards-compatible legacy method delegates to the new request-based API
     @Transactional
     public ExpenseResponse createExpense(
@@ -53,6 +61,10 @@ public class ExpenseService {
 
     @Transactional
     public ExpenseResponse createExpense(Long groupId, CreateExpenseRequest req) {
+        // normalize and validate total amount (currency contract: scale 2, HALF_UP)
+        if (req.amount() == null) throw new BadRequestException("Amount must be provided");
+        BigDecimal totalAmount = normalizeCurrency(req.amount());
+
         // participants
         List<Long> participantUserIds = req.participantUserIds();
         if (participantUserIds == null || participantUserIds.isEmpty()) {
@@ -92,20 +104,21 @@ public class ExpenseService {
             // map each participantUserIds order to exact amount, then include payer if not present
             Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
             for (int i = 0; i < participantUserIds.size(); i++) {
-                tmp.put(participantUserIds.get(i), exact.get(i).setScale(2, RoundingMode.HALF_UP));
+                BigDecimal v = normalizeCurrency(exact.get(i));
+                tmp.put(participantUserIds.get(i), v);
             }
             // if payer wasn't in participantUserIds, add their share as 0 (they'll be included in participants list later)
-            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO);
+            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
 
-            // validation: all positive (>= 0) and sum to amount within tolerance 0.01
+            // validation: all non-negative and sum to amount within tolerance 0.01
             BigDecimal sum = tmp.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
             BigDecimal tol = new BigDecimal("0.01");
-            if (sum.subtract(req.amount()).abs().compareTo(tol) > 0) {
+            if (sum.subtract(totalAmount).abs().compareTo(tol) > 0) {
                 throw new BadRequestException("Exact amounts must sum to total amount within $0.01 tolerance");
             }
 
             // If there is minor rounding difference, adjust by distributing leftover cents stably
-            sharesMap = distributeLeftover(tmp, req.amount());
+            sharesMap = distributeLeftover(tmp, totalAmount);
 
         } else if (req.getPercentages() != null) {
             var pct = req.getPercentages();
@@ -120,14 +133,14 @@ public class ExpenseService {
 
             Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
             for (int i = 0; i < participantUserIds.size(); i++) {
-                BigDecimal share = req.amount().multiply(pct.get(i)).divide(new BigDecimal("100"));
+                BigDecimal share = totalAmount.multiply(pct.get(i)).divide(new BigDecimal("100"));
                 tmp.put(participantUserIds.get(i), share.setScale(2, RoundingMode.DOWN)); // floor to 2 decimals
             }
 
             // ensure payer present
-            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO);
+            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
 
-            sharesMap = distributeLeftover(tmp, req.amount());
+            sharesMap = distributeLeftover(tmp, totalAmount);
 
         } else if (req.getShares() != null) {
             var s = req.getShares();
@@ -140,26 +153,28 @@ public class ExpenseService {
             Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
             for (int i = 0; i < participantUserIds.size(); i++) {
                 BigDecimal fraction = new BigDecimal(s.get(i)).divide(new BigDecimal(total), 10, RoundingMode.HALF_UP);
-                BigDecimal share = req.amount().multiply(fraction).setScale(2, RoundingMode.DOWN);
+                BigDecimal share = totalAmount.multiply(fraction).setScale(2, RoundingMode.DOWN);
                 tmp.put(participantUserIds.get(i), share);
             }
-            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO);
-            sharesMap = distributeLeftover(tmp, req.amount());
+            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            sharesMap = distributeLeftover(tmp, totalAmount);
 
         } else {
             // equal split
-            sharesMap = equalSplit(req.amount(), ids);
+            sharesMap = equalSplit(totalAmount, ids);
         }
 
         // Save expense
-        Expense expense = expenseRepo.save(new Expense(groupId, payer, req.description().trim(), req.amount()));
+        Expense expense = expenseRepo.save(new Expense(groupId, payer, req.description().trim(), totalAmount));
 
         for (var e : sharesMap.entrySet()) {
-            participantRepo.save(new ExpenseParticipant(expense.getId(), e.getKey(), e.getValue()));
+            // ensure stored shares are scale-2
+            BigDecimal normalizedShare = normalizeCurrency(e.getValue());
+            participantRepo.save(new ExpenseParticipant(expense.getId(), e.getKey(), normalizedShare));
         }
 
         // Ledger updates
-        ledger(groupId, payer).add(req.amount());
+        ledger(groupId, payer).add(totalAmount);
         for (var e : sharesMap.entrySet()) {
             ledger(groupId, e.getKey()).add(e.getValue().negate());
         }
@@ -177,13 +192,19 @@ public class ExpenseService {
         List<Map.Entry<Long, BigDecimal>> entries = new ArrayList<>(tmpMap.entrySet());
         entries.sort(Map.Entry.comparingByKey());
 
-        BigDecimal sum = entries.stream().map(Map.Entry::getValue).reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+        // ensure all entries are scaled to 2
+        Map<Long, BigDecimal> scaled = new LinkedHashMap<>();
+        for (Map.Entry<Long, BigDecimal> e : entries) {
+            scaled.put(e.getKey(), normalizeCurrency(e.getValue()));
+        }
+
+        BigDecimal sum = scaled.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
         BigDecimal diff = totalAmount.setScale(2, RoundingMode.HALF_UP).subtract(sum).setScale(2, RoundingMode.HALF_UP);
 
         int cents = diff.movePointRight(2).intValueExact(); // may be negative or positive
 
         Map<Long, BigDecimal> out = new LinkedHashMap<>();
-        for (Map.Entry<Long, BigDecimal> e : entries) out.put(e.getKey(), e.getValue());
+        for (Map.Entry<Long, BigDecimal> e : entries) out.put(e.getKey(), scaled.get(e.getKey()));
 
         int i = 0;
         int n = entries.size();
@@ -199,6 +220,9 @@ public class ExpenseService {
             i++;
             cents++;
         }
+
+        // final normalization
+        out.replaceAll((k, v) -> normalizeCurrency(v));
 
         return out;
     }
@@ -251,6 +275,9 @@ public class ExpenseService {
             if (t.getAmount() == null || t.getAmount().signum() <= 0) {
                 throw new BadRequestException("Transfer amount must be positive");
             }
+            BigDecimal amt = normalizeCurrency(t.getAmount());
+            if (amt.signum() <= 0) throw new BadRequestException("Transfer amount must be positive and non-zero");
+
             Long from = t.getFromUserId();
             Long to = t.getToUserId();
             // membership validation
@@ -260,14 +287,14 @@ public class ExpenseService {
             LedgerEntry fromEntry = ledger(groupId, from);
             LedgerEntry toEntry = ledger(groupId, to);
 
-            fromEntry.add(t.getAmount());
-            toEntry.add(t.getAmount().negate());
+            fromEntry.add(amt);
+            toEntry.add(amt.negate());
 
             ledgerRepo.save(fromEntry);
             ledgerRepo.save(toEntry);
 
-            // persist confirmed transfer for historical tracking
-            ConfirmedTransfer ct = new ConfirmedTransfer(groupId, from, to, t.getAmount());
+            // persist confirmed transfer for historical tracking (store normalized amount)
+            ConfirmedTransfer ct = new ConfirmedTransfer(groupId, from, to, amt);
             confirmedTransferRepo.save(ct);
         }
     }
@@ -331,6 +358,8 @@ public class ExpenseService {
             Long id = userIds.get(i % n);
             out.put(id, out.get(id).add(new BigDecimal("0.01")));
         }
+        // final normalization
+        out.replaceAll((k, v) -> normalizeCurrency(v));
         return out;
     }
 

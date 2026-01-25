@@ -85,4 +85,52 @@ public class ExpenseControllerIntegrationTest {
             assertThat(ow.get("amount").decimalValue().signum()).isGreaterThanOrEqualTo(0);
         }
     }
+
+    @Test
+    @DisplayName("Precision and leftover distribution for percentages")
+    void precisionAndLeftoverDistribution() throws Exception {
+        // create group
+        String group = "{\"name\":\"PrecGroup\"}";
+        String gresp = mvc.perform(post("/groups")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(group))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode gnode = mapper.readTree(gresp);
+        Long gid = gnode.get("id").asLong();
+
+        // add three members
+        String m1 = "{\"userName\":\"a\"}";
+        String r1 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        Long a = mapper.readTree(r1).get("userId").asLong();
+
+        String m2 = "{\"userName\":\"b\"}";
+        String r2 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        Long b = mapper.readTree(r2).get("userId").asLong();
+
+        String m3 = "{\"userName\":\"c\"}";
+        String r3 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m3)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        Long c = mapper.readTree(r3).get("userId").asLong();
+
+        // create expense of 100.00 with percentages [33.33,33.33,33.34]
+        String exp = String.format("{\"description\":\"Bill\",\"amount\":100.00,\"paidByUserId\":%d,\"participantUserIds\":[%d,%d,%d],\"percentages\":[33.33,33.33,33.34]}", a, a, b, c);
+        String eresp = mvc.perform(post("/groups/" + gid + "/expenses").contentType(MediaType.APPLICATION_JSON).content(exp))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode enode = mapper.readTree(eresp);
+
+        // verify amount and splits sum to total
+        BigDecimal total = enode.get("amount").decimalValue();
+        BigDecimal sum = BigDecimal.ZERO;
+        for (JsonNode s : enode.get("splits")) {
+            sum = sum.add(s.get("shareAmount").decimalValue());
+        }
+        assertThat(total).isEqualByComparingTo(sum);
+
+        // verify each split has scale 2
+        for (JsonNode s : enode.get("splits")) {
+            BigDecimal v = s.get("shareAmount").decimalValue();
+            assertThat(v.scale()).isEqualTo(2);
+        }
+    }
 }
