@@ -127,8 +127,28 @@ public class ExpenseService {
         // Determine shares mapping based on requested split mode
         Map<Long, BigDecimal> sharesMap = null;
 
+        // Enforce that exactly one split mode is provided
+        int splitModes = 0;
+        List<String> providedModes = new ArrayList<>();
+        if (req.getExactAmounts() != null && !req.getExactAmounts().isEmpty()) {
+            splitModes++;
+            providedModes.add("exactAmounts");
+        }
+        if (req.getPercentages() != null && !req.getPercentages().isEmpty()) {
+            splitModes++;
+            providedModes.add("percentages");
+        }
+        if (req.getShares() != null && !req.getShares().isEmpty()) {
+            splitModes++;
+            providedModes.add("shares");
+        }
+
+        if (splitModes > 1) {
+            throw new BadRequestException("Only one split mode can be provided. Found: " + String.join(", ", providedModes));
+        }
+
         // Mode precedence: exactAmounts > percentages > shares > equal
-        if (req.getExactAmounts() != null) {
+        if (req.getExactAmounts() != null && !req.getExactAmounts().isEmpty()) {
             var exact = req.getExactAmounts();
             if (exact.size() != participantUserIds.size()) {
                 throw new BadRequestException("exactAmounts length must match participantUserIds length");
@@ -152,7 +172,7 @@ public class ExpenseService {
             // If there is minor rounding difference, adjust by distributing leftover cents stably
             sharesMap = distributeLeftover(tmp, totalAmount);
 
-        } else if (req.getPercentages() != null) {
+        } else if (req.getPercentages() != null && !req.getPercentages().isEmpty()) {
             var pct = req.getPercentages();
             if (pct.size() != participantUserIds.size()) {
                 throw new BadRequestException("percentages length must match participantUserIds length");
@@ -174,7 +194,7 @@ public class ExpenseService {
 
             sharesMap = distributeLeftover(tmp, totalAmount);
 
-        } else if (req.getShares() != null) {
+        } else if (req.getShares() != null && !req.getShares().isEmpty()) {
             var s = req.getShares();
             if (s.size() != participantUserIds.size()) {
                 throw new BadRequestException("shares length must match participantUserIds length");
@@ -462,7 +482,28 @@ public class ExpenseService {
         // compute new sharesMap using same precedence logic as createExpense
         Map<Long, BigDecimal> newShares = null;
         BigDecimal totalAmount = normalizeCurrency(req.amount());
-        if (req.getExactAmounts() != null) {
+
+        // Enforce that exactly one split mode is provided
+        int splitModes = 0;
+        List<String> providedModes = new ArrayList<>();
+        if (req.getExactAmounts() != null && !req.getExactAmounts().isEmpty()) {
+            splitModes++;
+            providedModes.add("exactAmounts");
+        }
+        if (req.getPercentages() != null && !req.getPercentages().isEmpty()) {
+            splitModes++;
+            providedModes.add("percentages");
+        }
+        if (req.getShares() != null && !req.getShares().isEmpty()) {
+            splitModes++;
+            providedModes.add("shares");
+        }
+
+        if (splitModes > 1) {
+            throw new BadRequestException("Only one split mode can be provided. Found: " + String.join(", ", providedModes));
+        }
+
+        if (req.getExactAmounts() != null && !req.getExactAmounts().isEmpty()) {
             var exact = req.getExactAmounts();
             if (exact.size() != participantUserIds.size())
                 throw new BadRequestException("exactAmounts length must match participantUserIds length");
@@ -471,7 +512,7 @@ public class ExpenseService {
                 tmp.put(participantUserIds.get(i), normalizeCurrency(exact.get(i)));
             if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
             newShares = distributeLeftover(tmp, totalAmount);
-        } else if (req.getPercentages() != null) {
+        } else if (req.getPercentages() != null && !req.getPercentages().isEmpty()) {
             var pct = req.getPercentages();
             if (pct.size() != participantUserIds.size())
                 throw new BadRequestException("percentages length must match participantUserIds length");
@@ -483,7 +524,7 @@ public class ExpenseService {
                 tmp.put(participantUserIds.get(i), totalAmount.multiply(pct.get(i)).divide(new BigDecimal("100")).setScale(2, RoundingMode.DOWN));
             if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
             newShares = distributeLeftover(tmp, totalAmount);
-        } else if (req.getShares() != null) {
+        } else if (req.getShares() != null && !req.getShares().isEmpty()) {
             var s = req.getShares();
             if (s.size() != participantUserIds.size())
                 throw new BadRequestException("shares length must match participantUserIds length");

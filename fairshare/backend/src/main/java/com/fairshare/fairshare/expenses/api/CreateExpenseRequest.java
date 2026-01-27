@@ -13,7 +13,7 @@ import java.util.Objects;
 
 @Schema(
         name = "CreateExpenseRequest",
-        description = "Request to create an expense. Split modes (only one of shares/exactAmounts/percentages should be provided) are applied in the following precedence: exactAmounts > percentages > shares > equal split.\n" +
+        description = "Request to create an expense. Exactly one split mode (shares, exactAmounts, or percentages) must be provided. If none are provided, the expense is split equally among participants.\n" +
                 "- exactAmounts: list of exact money amounts per participant (must sum to total ± $0.01).\n" +
                 "- percentages: list of percentages per participant (must sum to 100% ± 0.01).\n" +
                 "- shares: list of integer weights (relative shares).\n" +
