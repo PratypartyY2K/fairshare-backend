@@ -9,17 +9,13 @@ import com.fairshare.fairshare.expenses.LedgerEntryRepository;
 import com.fairshare.fairshare.expenses.ExpenseParticipantRepository;
 import com.fairshare.fairshare.expenses.ConfirmedTransferRepository;
 import com.fairshare.fairshare.expenses.ExpenseEventRepository;
-import com.fairshare.fairshare.expenses.api.CreateExpenseRequest;
-import com.fairshare.fairshare.expenses.api.ExpenseResponse;
-import com.fairshare.fairshare.expenses.api.LedgerResponse;
+import com.fairshare.fairshare.expenses.api.*;
 import com.fairshare.fairshare.groups.GroupMemberRepository;
 import com.fairshare.fairshare.expenses.model.ConfirmedTransfer;
 import com.fairshare.fairshare.expenses.model.ExpenseEvent;
 import com.fairshare.fairshare.expenses.model.ExpenseParticipant;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
-import com.fairshare.fairshare.expenses.api.SettlementResponse;
-import com.fairshare.fairshare.expenses.api.ConfirmSettlementsRequest;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -332,15 +328,27 @@ public class ExpenseService {
     }
 
     @Transactional
-    public void confirmSettlements(Long groupId, ConfirmSettlementsRequest req) {
-        if (req == null || req.getTransfers() == null || req.getTransfers().isEmpty()) return;
-
-        String confirmationId = req.getConfirmationId();
-        if (confirmationId != null && !confirmationId.isBlank()) {
-            var existing = confirmedTransferRepo.findByGroupIdAndConfirmationId(groupId, confirmationId);
-            if (existing.isPresent()) return; // idempotent: already processed
+    public ConfirmSettlementsResponse confirmSettlements(Long groupId, ConfirmSettlementsRequest req, String confirmationIdHeader) {
+        if (req == null || req.getTransfers() == null || req.getTransfers().isEmpty()) {
+            return new ConfirmSettlementsResponse(null, 0);
         }
 
+        String confirmationId;
+        if (confirmationIdHeader != null && !confirmationIdHeader.isBlank()) {
+            confirmationId = confirmationIdHeader;
+        } else if (req.getConfirmationId() != null && !req.getConfirmationId().isBlank()) {
+            confirmationId = req.getConfirmationId();
+        } else {
+            confirmationId = UUID.randomUUID().toString();
+        }
+
+        var existing = confirmedTransferRepo.findByGroupIdAndConfirmationId(groupId, confirmationId);
+        if (!existing.isEmpty()) {
+            int appliedCount = confirmedTransferRepo.countByGroupIdAndConfirmationId(groupId, confirmationId);
+            return new ConfirmSettlementsResponse(confirmationId, appliedCount);
+        }
+
+        int appliedCount = 0;
         for (var t : req.getTransfers()) {
             if (t.getAmount() == null || t.getAmount().signum() <= 0) {
                 throw new BadRequestException("Transfer amount must be positive");
@@ -364,11 +372,11 @@ public class ExpenseService {
             ledgerRepo.save(toEntry);
 
             // persist confirmed transfer for historical tracking (store normalized amount + confirmation id if provided)
-            ConfirmedTransfer ct = (confirmationId != null && !confirmationId.isBlank())
-                    ? new ConfirmedTransfer(groupId, from, to, amt, confirmationId)
-                    : new ConfirmedTransfer(groupId, from, to, amt);
+            ConfirmedTransfer ct = new ConfirmedTransfer(groupId, from, to, amt, confirmationId);
             confirmedTransferRepo.save(ct);
+            appliedCount++;
         }
+        return new ConfirmSettlementsResponse(confirmationId, appliedCount);
     }
 
     @Transactional

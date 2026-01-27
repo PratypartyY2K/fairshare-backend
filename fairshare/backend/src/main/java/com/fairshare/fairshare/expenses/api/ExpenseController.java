@@ -89,22 +89,18 @@ public class ExpenseController {
     }
 
     @PostMapping("/settlements/confirm")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    @io.swagger.v3.oas.annotations.Operation(summary = "Confirm settlement transfers", description = "Apply a list of transfers to the ledger as confirmed payments")
+    @ResponseStatus(HttpStatus.OK) // Changed to 200 OK
+    @io.swagger.v3.oas.annotations.Operation(summary = "Confirm settlement transfers", description = "Apply a list of transfers to the ledger as confirmed payments. Returns the confirmation ID and count of applied transfers.")
     @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ConfirmSettlementsRequest.class), examples = {
             @io.swagger.v3.oas.annotations.media.ExampleObject(name = "ConfirmWithId", summary = "Confirm with confirmationId for idempotency", value = "{\"confirmationId\":\"confirm-abc-123\",\"transfers\":[{\"fromUserId\":1,\"toUserId\":2,\"amount\":\"10.00\"}]}")
     }))
     @io.swagger.v3.oas.annotations.Parameter(name = "Confirmation-Id", in = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER, description = "Optional confirmation id (UUID) to make confirmations idempotent; if provided it overrides the body confirmationId when body lacks one", required = false)
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "No Content"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ConfirmSettlementsResponse.class))), // Changed response type
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
-    public void confirmSettlements(@PathVariable Long groupId, @RequestHeader(value = "Confirmation-Id", required = false) String confirmationIdHeader, @Valid @RequestBody ConfirmSettlementsRequest req) {
-        // If header provided and request body has no confirmationId, use the header
-        if ((req.getConfirmationId() == null || req.getConfirmationId().isBlank()) && confirmationIdHeader != null && !confirmationIdHeader.isBlank()) {
-            req.setConfirmationId(confirmationIdHeader);
-        }
-        service.confirmSettlements(groupId, req);
+    public ConfirmSettlementsResponse confirmSettlements(@PathVariable Long groupId, @RequestHeader(value = "Confirmation-Id", required = false) String confirmationIdHeader, @Valid @RequestBody ConfirmSettlementsRequest req) {
+        return service.confirmSettlements(groupId, req, confirmationIdHeader);
     }
 
     @GetMapping("/api/confirmation-id") // Changed to a global path
