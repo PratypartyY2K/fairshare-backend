@@ -1,10 +1,13 @@
 package com.fairshare.fairshare.expenses.api;
 
+import com.fairshare.fairshare.common.api.PaginatedResponse;
 import com.fairshare.fairshare.expenses.service.ExpenseService;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -77,8 +80,15 @@ public class ExpenseController {
     @GetMapping("/expenses")
     @io.swagger.v3.oas.annotations.Operation(summary = "List expenses for a group")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK")
-    public List<ExpenseResponse> listExpenses(@PathVariable Long groupId) {
-        return service.listExpenses(groupId);
+    public PaginatedResponse<ExpenseResponse> listExpenses(
+            @PathVariable Long groupId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant toDate
+    ) {
+        return service.listExpenses(groupId, page, size, sort, fromDate, toDate);
     }
 
     @GetMapping("/settlements")
@@ -145,7 +155,7 @@ public class ExpenseController {
     @io.swagger.v3.oas.annotations.Operation(summary = "Update an expense", description = "Update an existing expense (full replacement of description/amount/splits). Produces an ExpenseUpdated event.")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Updated", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ExpenseResponse.class))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not Found", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
     public ExpenseResponse updateExpense(@PathVariable Long groupId, @PathVariable Long expenseId, @Valid @RequestBody CreateExpenseRequest req) {
@@ -166,14 +176,29 @@ public class ExpenseController {
 
     @GetMapping("/events")
     @io.swagger.v3.oas.annotations.Operation(summary = "List expense events for a group", description = "Return the event log (ExpenseCreated, ExpenseUpdated, ExpenseVoided, etc.) for auditing")
-    public java.util.List<com.fairshare.fairshare.expenses.api.EventResponse> events(@PathVariable Long groupId) {
-        return service.listEvents(groupId);
+    public PaginatedResponse<EventResponse> events(
+            @PathVariable Long groupId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant toDate
+    ) {
+        return service.listEvents(groupId, page, size, sort, fromDate, toDate);
     }
 
     @GetMapping("/confirmed-transfers")
     @io.swagger.v3.oas.annotations.Operation(summary = "List confirmed transfers for a group", description = "Return confirmed transfers; optionally filter by confirmationId for idempotency lookup")
-    public java.util.List<com.fairshare.fairshare.expenses.api.ConfirmedTransferResponse> confirmedTransfers(@PathVariable Long groupId, @RequestParam(required = false) String confirmationId) {
-        return service.listConfirmedTransfers(groupId, confirmationId);
+    public PaginatedResponse<ConfirmedTransferResponse> confirmedTransfers(
+            @PathVariable Long groupId,
+            @RequestParam(required = false) String confirmationId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant fromDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant toDate
+    ) {
+        return service.listConfirmedTransfers(groupId, confirmationId, page, size, sort, fromDate, toDate);
     }
 
 }

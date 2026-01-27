@@ -1,10 +1,19 @@
-package com.fairshare.fairshare.groups;
+package com.fairshare.fairshare.groups.service;
 
+import com.fairshare.fairshare.common.api.PaginatedResponse;
+import com.fairshare.fairshare.groups.Group;
+import com.fairshare.fairshare.groups.GroupMember;
+import com.fairshare.fairshare.groups.GroupMemberRepository;
+import com.fairshare.fairshare.groups.GroupRepository;
+import com.fairshare.fairshare.groups.api.AddMemberResponse;
 import com.fairshare.fairshare.groups.api.dto.GroupResponse;
 import com.fairshare.fairshare.groups.api.dto.MemberResponse;
 import com.fairshare.fairshare.users.User;
 import com.fairshare.fairshare.users.UserRepository;
 import jakarta.transaction.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -27,7 +36,7 @@ public class GroupService {
     }
 
     @Transactional
-    public com.fairshare.fairshare.groups.api.AddMemberResponse addMember(Long groupId, String userName) {
+    public AddMemberResponse addMember(Long groupId, String userName) {
         Group group = groupRepo.findById(groupId)
                 .orElseThrow(() -> new IllegalArgumentException("Group not found"));
 
@@ -38,7 +47,7 @@ public class GroupService {
             memberRepo.save(new GroupMember(group, user));
         }
 
-        return new com.fairshare.fairshare.groups.api.AddMemberResponse(user.getId(), user.getName());
+        return new AddMemberResponse(user.getId(), user.getName());
     }
 
 
@@ -74,14 +83,28 @@ public class GroupService {
         return new GroupResponse(saved.getId(), saved.getName(), members);
     }
 
-    public List<GroupResponse> listGroups() {
-        return groupRepo.findAll().stream()
+    public PaginatedResponse<GroupResponse> listGroups(int page, int size, String sort) {
+        String[] sortParams = sort.split(",");
+        Sort sortOrder = Sort.by(Sort.Direction.fromString(sortParams[1]), sortParams[0]);
+        PageRequest pageRequest = PageRequest.of(page, size, sortOrder);
+
+        Page<Group> groupPage = groupRepo.findAll(pageRequest);
+
+        List<GroupResponse> groupResponses = groupPage.getContent().stream()
                 .map(g -> new GroupResponse(
                         g.getId(),
                         g.getName(),
                         listMembersForGroup(g.getId())
                 ))
                 .toList();
+
+        return new PaginatedResponse<>(
+                groupResponses,
+                groupPage.getTotalElements(),
+                groupPage.getTotalPages(),
+                groupPage.getNumber(),
+                groupPage.getSize()
+        );
     }
 
     private List<MemberResponse> listMembersForGroup(Long groupId) {

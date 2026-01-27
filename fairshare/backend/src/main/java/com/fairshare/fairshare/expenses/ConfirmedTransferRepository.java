@@ -1,11 +1,14 @@
 package com.fairshare.fairshare.expenses;
 
 import com.fairshare.fairshare.expenses.model.ConfirmedTransfer;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,4 +28,10 @@ public interface ConfirmedTransferRepository extends JpaRepository<ConfirmedTran
     List<ConfirmedTransfer> findByGroupIdAndFromUserId(Long groupId, Long fromUserId);
 
     List<ConfirmedTransfer> findByGroupIdAndToUserId(Long groupId, Long toUserId);
+
+    Page<ConfirmedTransfer> findByGroupId(Long groupId, Pageable pageable);
+
+    Page<ConfirmedTransfer> findByGroupIdAndConfirmationId(Long groupId, String confirmationId, Pageable pageable);
+
+    Page<ConfirmedTransfer> findByGroupIdAndCreatedAtBetween(Long groupId, Instant fromDate, Instant toDate, Pageable pageable);
 }

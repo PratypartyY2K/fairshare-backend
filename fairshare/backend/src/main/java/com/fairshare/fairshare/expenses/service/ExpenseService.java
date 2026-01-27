@@ -2,6 +2,7 @@ package com.fairshare.fairshare.expenses.service;
 
 import com.fairshare.fairshare.common.BadRequestException;
 import com.fairshare.fairshare.common.NotFoundException;
+import com.fairshare.fairshare.common.api.PaginatedResponse;
 import com.fairshare.fairshare.expenses.Expense;
 import com.fairshare.fairshare.expenses.ExpenseRepository;
 import com.fairshare.fairshare.expenses.LedgerEntry;
@@ -16,10 +17,14 @@ import com.fairshare.fairshare.expenses.model.ExpenseEvent;
 import com.fairshare.fairshare.expenses.model.ExpenseParticipant;
 import com.fairshare.fairshare.groups.model.GroupMember;
 import jakarta.transaction.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -298,19 +303,43 @@ public class ExpenseService {
     }
 
     @Transactional
-    public List<ExpenseResponse> listExpenses(Long groupId) {
-        var expenses = expenseRepo.findByGroupIdOrderByCreatedAtDesc(groupId);
+    public PaginatedResponse<ExpenseResponse> listExpenses(Long groupId, int page, int size, String sort, Instant fromDate, Instant toDate) {
+        Sort sortBy = parseSort(sort);
+        PageRequest pageRequest = PageRequest.of(page, size, sortBy);
 
-        List<ExpenseResponse> out = new ArrayList<>();
-        for (Expense ex : expenses) {
-            if (ex.isVoided()) continue; // skip voided expenses (handle nullable DB column safely)
+        Page<Expense> expensesPage;
+        if (fromDate != null && toDate != null) {
+            expensesPage = expenseRepo.findByGroupIdAndVoidedFalseAndCreatedAtBetween(groupId, fromDate, toDate, pageRequest);
+        } else {
+            expensesPage = expenseRepo.findByGroupIdAndVoidedFalse(groupId, pageRequest);
+        }
+
+        List<ExpenseResponse> expenseResponses = new ArrayList<>();
+        for (Expense ex : expensesPage.getContent()) {
             Map<Long, BigDecimal> shares = new LinkedHashMap<>();
             for (ExpenseParticipant p : participantRepo.findByExpenseId(ex.getId())) {
                 shares.put(p.getUserId(), p.getShareAmount());
             }
-            out.add(toExpenseResponse(ex, shares));
+            expenseResponses.add(toExpenseResponse(ex, shares));
         }
-        return out;
+
+        return new PaginatedResponse<>(
+                expenseResponses,
+                expensesPage.getTotalElements(),
+                expensesPage.getTotalPages(),
+                expensesPage.getNumber(),
+                expensesPage.getSize()
+        );
+    }
+
+    private Sort parseSort(String sort) {
+        String[] parts = sort.split(",");
+        String property = parts[0];
+        Sort.Direction direction = Sort.Direction.ASC;
+        if (parts.length > 1 && parts[1].equalsIgnoreCase("desc")) {
+            direction = Sort.Direction.DESC;
+        }
+        return Sort.by(direction, property);
     }
 
     private ExpenseResponse toExpenseResponse(Expense expense, Map<Long, BigDecimal> shares) {
@@ -624,25 +653,55 @@ public class ExpenseService {
     }
 
     @Transactional
-    public java.util.List<com.fairshare.fairshare.expenses.api.EventResponse> listEvents(Long groupId) {
-        var evts = eventRepo.findByGroupIdOrderByCreatedAtDesc(groupId);
-        var out = new ArrayList<com.fairshare.fairshare.expenses.api.EventResponse>();
-        for (var e : evts) {
-            out.add(new com.fairshare.fairshare.expenses.api.EventResponse(e.getId(), e.getGroupId(), e.getExpenseId(), e.getEventType(), e.getPayload(), e.getCreatedAt()));
+    public PaginatedResponse<EventResponse> listEvents(Long groupId, int page, int size, String sort, Instant fromDate, Instant toDate) {
+        Sort sortBy = parseSort(sort);
+        PageRequest pageRequest = PageRequest.of(page, size, sortBy);
+
+        Page<ExpenseEvent> eventPage;
+        if (fromDate != null && toDate != null) {
+            eventPage = eventRepo.findByGroupIdAndCreatedAtBetween(groupId, fromDate, toDate, pageRequest);
+        } else {
+            eventPage = eventRepo.findByGroupId(groupId, pageRequest);
         }
-        return out;
+
+        List<EventResponse> eventResponses = eventPage.getContent().stream()
+                .map(e -> new EventResponse(e.getId(), e.getGroupId(), e.getExpenseId(), e.getEventType(), e.getPayload(), e.getCreatedAt()))
+                .toList();
+
+        return new PaginatedResponse<>(
+                eventResponses,
+                eventPage.getTotalElements(),
+                eventPage.getTotalPages(),
+                eventPage.getNumber(),
+                eventPage.getSize()
+        );
     }
 
     @Transactional
-    public java.util.List<com.fairshare.fairshare.expenses.api.ConfirmedTransferResponse> listConfirmedTransfers(Long groupId, String confirmationId) {
-        var rows = (confirmationId == null || confirmationId.isBlank())
-                ? confirmedTransferRepo.findByGroupIdOrderByCreatedAtDesc(groupId)
-                : confirmedTransferRepo.findByGroupIdAndConfirmationIdOrderByCreatedAtDesc(groupId, confirmationId);
-        var out = new ArrayList<com.fairshare.fairshare.expenses.api.ConfirmedTransferResponse>();
-        for (var ct : rows) {
-            out.add(new com.fairshare.fairshare.expenses.api.ConfirmedTransferResponse(ct.getId(), ct.getGroupId(), ct.getFromUserId(), ct.getToUserId(), ct.getAmount(), ct.getConfirmationId(), ct.getCreatedAt()));
+    public PaginatedResponse<ConfirmedTransferResponse> listConfirmedTransfers(Long groupId, String confirmationId, int page, int size, String sort, Instant fromDate, Instant toDate) {
+        Sort sortBy = parseSort(sort);
+        PageRequest pageRequest = PageRequest.of(page, size, sortBy);
+
+        Page<ConfirmedTransfer> transferPage;
+        if (confirmationId != null && !confirmationId.isBlank()) {
+            transferPage = confirmedTransferRepo.findByGroupIdAndConfirmationId(groupId, confirmationId, pageRequest);
+        } else if (fromDate != null && toDate != null) {
+            transferPage = confirmedTransferRepo.findByGroupIdAndCreatedAtBetween(groupId, fromDate, toDate, pageRequest);
+        } else {
+            transferPage = confirmedTransferRepo.findByGroupId(groupId, pageRequest);
         }
-        return out;
+
+        List<ConfirmedTransferResponse> transferResponses = transferPage.getContent().stream()
+                .map(ct -> new ConfirmedTransferResponse(ct.getId(), ct.getGroupId(), ct.getFromUserId(), ct.getToUserId(), ct.getAmount(), ct.getConfirmationId(), ct.getCreatedAt()))
+                .toList();
+
+        return new PaginatedResponse<>(
+                transferResponses,
+                transferPage.getTotalElements(),
+                transferPage.getTotalPages(),
+                transferPage.getNumber(),
+                transferPage.getSize()
+        );
     }
 
     @Transactional

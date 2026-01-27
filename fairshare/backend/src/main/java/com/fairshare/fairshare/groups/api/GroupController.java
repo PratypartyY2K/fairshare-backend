@@ -1,12 +1,15 @@
 package com.fairshare.fairshare.groups.api;
 
+import com.fairshare.fairshare.common.api.PaginatedResponse;
 import com.fairshare.fairshare.groups.Group;
-import com.fairshare.fairshare.groups.GroupService;
+import com.fairshare.fairshare.groups.service.GroupService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import com.fairshare.fairshare.groups.api.dto.GroupResponse;
 import com.fairshare.fairshare.groups.api.dto.GroupUpdateRequest;
+import com.fairshare.fairshare.groups.api.dto.CreateGroupRequest;
+import com.fairshare.fairshare.groups.api.dto.AddMemberRequest;
 
 import java.util.List;
 
@@ -39,8 +42,12 @@ public class GroupController {
     }
 
     @GetMapping
-    public List<GroupResponse> list() {
-        return service.listGroups();
+    public PaginatedResponse<GroupResponse> list(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "name,asc") String sort
+    ) {
+        return service.listGroups(page, size, sort);
     }
 
     @PatchMapping("/{groupId}")
