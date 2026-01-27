@@ -106,8 +106,15 @@ public class ExpenseController {
     @GetMapping("/api/confirmation-id") // Changed to a global path
     @io.swagger.v3.oas.annotations.Operation(summary = "Generate a confirmation id (UUID)", description = "Return a fresh confirmation id to be used by the client when confirming settlements; handy for a 'Generate ID' button")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ConfirmationIdResponse.class)))
-    public ConfirmationIdResponse generateConfirmationId() { // Removed @PathVariable Long groupId
+    public ConfirmationIdResponse generateConfirmationId() {
         return new ConfirmationIdResponse(UUID.randomUUID().toString());
+    }
+
+    @GetMapping("/explanations/ledger")
+    @io.swagger.v3.oas.annotations.Operation(summary = "Get ledger explanations for a group", description = "Returns a detailed explanation of each user's ledger, including contributing expenses and transfers.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = LedgerExplanationResponse.class)))
+    public LedgerExplanationResponse getLedgerExplanation(@PathVariable Long groupId) {
+        return service.getLedgerExplanation(groupId);
     }
 
     @GetMapping("/owes")
@@ -138,7 +145,7 @@ public class ExpenseController {
     @io.swagger.v3.oas.annotations.Operation(summary = "Update an expense", description = "Update an existing expense (full replacement of description/amount/splits). Produces an ExpenseUpdated event.")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Updated", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ExpenseResponse.class))),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class))),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not Found", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
     public ExpenseResponse updateExpense(@PathVariable Long groupId, @PathVariable Long expenseId, @Valid @RequestBody CreateExpenseRequest req) {

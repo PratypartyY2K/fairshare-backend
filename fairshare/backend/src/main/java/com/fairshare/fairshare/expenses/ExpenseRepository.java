@@ -11,4 +11,6 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
     Optional<Expense> findByGroupIdAndIdempotencyKey(Long groupId, String idempotencyKey);
 
     List<Expense> findByGroupIdAndVoidedFalseOrderByCreatedAtDesc(Long groupId);
+
+    List<Expense> findByGroupIdAndPayerUserId(Long groupId, Long payerUserId);
 }

@@ -14,12 +14,14 @@ import com.fairshare.fairshare.groups.GroupMemberRepository;
 import com.fairshare.fairshare.expenses.model.ConfirmedTransfer;
 import com.fairshare.fairshare.expenses.model.ExpenseEvent;
 import com.fairshare.fairshare.expenses.model.ExpenseParticipant;
+import com.fairshare.fairshare.groups.model.GroupMember;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class ExpenseService {
@@ -641,5 +643,79 @@ public class ExpenseService {
             out.add(new com.fairshare.fairshare.expenses.api.ConfirmedTransferResponse(ct.getId(), ct.getGroupId(), ct.getFromUserId(), ct.getToUserId(), ct.getAmount(), ct.getConfirmationId(), ct.getCreatedAt()));
         }
         return out;
+    }
+
+    @Transactional
+    public LedgerExplanationResponse getLedgerExplanation(Long groupId) {
+        List<GroupMember> members = groupMemberRepo.findByGroupId(groupId);
+        List<LedgerExplanationResponse.UserLedgerExplanation> explanations = new ArrayList<>();
+
+        for (GroupMember member : members) {
+            Long userId = member.getUser().getId();
+            List<LedgerExplanationResponse.Contribution> contributions = new ArrayList<>();
+            BigDecimal netBalance = BigDecimal.ZERO;
+
+            // Expenses paid by the user
+            List<Expense> paidExpenses = expenseRepo.findByGroupIdAndPayerUserId(groupId, userId);
+            for (Expense expense : paidExpenses) {
+                contributions.add(new LedgerExplanationResponse.Contribution(
+                        "EXPENSE_PAID",
+                        expense.getAmount(),
+                        expense.getDescription(),
+                        expense.getCreatedAt(),
+                        expense.getId()
+                ));
+                netBalance = netBalance.add(expense.getAmount());
+            }
+
+            // User's share in all expenses
+            List<ExpenseParticipant> participations = participantRepo.findByUserIdAndGroupId(userId, groupId);
+            for (ExpenseParticipant participation : participations) {
+                contributions.add(new LedgerExplanationResponse.Contribution(
+                        "EXPENSE_SHARE",
+                        participation.getShareAmount().negate(),
+                        participation.getExpense().getDescription(),
+                        participation.getExpense().getCreatedAt(),
+                        participation.getExpense().getId()
+                ));
+                netBalance = netBalance.subtract(participation.getShareAmount());
+            }
+
+            // Transfers sent by the user
+            List<ConfirmedTransfer> sentTransfers = confirmedTransferRepo.findByGroupIdAndFromUserId(groupId, userId);
+            for (ConfirmedTransfer transfer : sentTransfers) {
+                contributions.add(new LedgerExplanationResponse.Contribution(
+                        "TRANSFER_SENT",
+                        transfer.getAmount(),
+                        "Transfer to user " + transfer.getToUserId(),
+                        transfer.getCreatedAt(),
+                        transfer.getId()
+                ));
+                netBalance = netBalance.add(transfer.getAmount());
+            }
+
+            // Transfers received by the user
+            List<ConfirmedTransfer> receivedTransfers = confirmedTransferRepo.findByGroupIdAndToUserId(groupId, userId);
+            for (ConfirmedTransfer transfer : receivedTransfers) {
+                contributions.add(new LedgerExplanationResponse.Contribution(
+                        "TRANSFER_RECEIVED",
+                        transfer.getAmount().negate(),
+                        "Transfer from user " + transfer.getFromUserId(),
+                        transfer.getCreatedAt(),
+                        transfer.getId()
+                ));
+                netBalance = netBalance.subtract(transfer.getAmount());
+            }
+
+            contributions.sort(Comparator.comparing(LedgerExplanationResponse.Contribution::timestamp).reversed());
+
+            explanations.add(new LedgerExplanationResponse.UserLedgerExplanation(
+                    userId,
+                    netBalance,
+                    contributions
+            ));
+        }
+
+        return new LedgerExplanationResponse(explanations);
     }
 }

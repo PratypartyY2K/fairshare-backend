@@ -11,7 +11,7 @@ import java.util.Optional;
 
 @Repository
 public interface ConfirmedTransferRepository extends JpaRepository<ConfirmedTransfer, Long> {
-    Optional<ConfirmedTransfer> findByGroupIdAndConfirmationId(Long groupId, String confirmationId);
+    List<ConfirmedTransfer> findByGroupIdAndConfirmationId(Long groupId, String confirmationId);
 
     List<ConfirmedTransfer> findByGroupIdOrderByCreatedAtDesc(Long groupId);
 
@@ -21,4 +21,8 @@ public interface ConfirmedTransferRepository extends JpaRepository<ConfirmedTran
     BigDecimal sumConfirmedAmount(Long groupId, Long fromUserId, Long toUserId);
 
     int countByGroupIdAndConfirmationId(Long groupId, String confirmationId);
+
+    List<ConfirmedTransfer> findByGroupIdAndFromUserId(Long groupId, Long fromUserId);
+
+    List<ConfirmedTransfer> findByGroupIdAndToUserId(Long groupId, Long toUserId);
 }
