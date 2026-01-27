@@ -19,4 +19,7 @@ public interface ExpenseParticipantRepository extends JpaRepository<ExpenseParti
 
     @Query("SELECT ep FROM ExpenseParticipant ep JOIN ep.expense e WHERE ep.userId = ?1 AND e.groupId = ?2")
     List<ExpenseParticipant> findByUserIdAndGroupId(Long userId, Long groupId);
+
+    // Delete a single participant row for an expense and user
+    void deleteByExpense_IdAndUserId(Long expenseId, Long userId);
 }

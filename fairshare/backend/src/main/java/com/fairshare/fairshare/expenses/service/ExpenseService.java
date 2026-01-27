@@ -23,6 +23,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -38,6 +41,7 @@ public class ExpenseService {
     private final GroupMemberRepository groupMemberRepo;
     private final ConfirmedTransferRepository confirmedTransferRepo;
     private final ExpenseEventRepository eventRepo;
+    private final EntityManager em;
 
     public ExpenseService(
             ExpenseRepository expenseRepo,
@@ -45,7 +49,8 @@ public class ExpenseService {
             LedgerEntryRepository ledgerRepo,
             GroupMemberRepository groupMemberRepo,
             ConfirmedTransferRepository confirmedTransferRepo,
-            ExpenseEventRepository eventRepo
+            ExpenseEventRepository eventRepo,
+            EntityManager em
     ) {
         this.expenseRepo = expenseRepo;
         this.participantRepo = participantRepo;
@@ -53,6 +58,7 @@ public class ExpenseService {
         this.groupMemberRepo = groupMemberRepo;
         this.confirmedTransferRepo = confirmedTransferRepo;
         this.eventRepo = eventRepo;
+        this.em = em;
     }
 
     // Currency normalization helper: enforce scale=2 and HALF_UP rounding, non-null, non-negative
@@ -494,6 +500,8 @@ public class ExpenseService {
     @Transactional
     public ExpenseResponse updateExpense(Long groupId, Long expenseId, CreateExpenseRequest req) {
         Expense ex = expenseRepo.findById(expenseId).orElseThrow(() -> new NotFoundException("Expense not found"));
+        // Acquire a pessimistic lock on the expense row to serialize concurrent updates and avoid unique constraint races
+        em.lock(ex, LockModeType.PESSIMISTIC_WRITE);
         if (!ex.getGroupId().equals(groupId)) throw new BadRequestException("Expense does not belong to group");
         if (ex.isVoided()) throw new BadRequestException("Expense is voided");
 
@@ -593,12 +601,53 @@ public class ExpenseService {
         for (Long id : newShares.keySet())
             oldSharesDefault.putIfAbsent(id, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
 
-        // Delete old participants and insert new ones
-        participantRepo.deleteByExpense_Id(expenseId);
+        // Update participants safely: update existing, insert new, delete removed
+        // Fetch existing participant entities keyed by userId
+        List<ExpenseParticipant> existingEntities = participantRepo.findByExpense_Id(expenseId);
+        Map<Long, ExpenseParticipant> existingByUser = existingEntities.stream()
+                .collect(Collectors.toMap(ExpenseParticipant::getUserId, ep -> ep, (a, b) -> a, LinkedHashMap::new));
+
+        // Process newShares: compute per-user ledger deltas and apply updates/inserts
         for (Map.Entry<Long, BigDecimal> en : newShares.entrySet()) {
             Long uid = en.getKey();
             BigDecimal newShare = normalizeCurrency(en.getValue());
-            participantRepo.save(new ExpenseParticipant(ex, uid, newShare));
+
+            BigDecimal oldShare = existingByUser.containsKey(uid) ? existingByUser.get(uid).getShareAmount() : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+
+            // participant delta to apply to ledger: oldShare - newShare (because participant ledger stores negative shares)
+            BigDecimal participantDelta = oldShare.subtract(newShare).setScale(2, RoundingMode.HALF_UP);
+            LedgerEntry le = ledger(groupId, uid);
+            le.add(participantDelta);
+            ledgerRepo.save(le);
+
+            if (existingByUser.containsKey(uid)) {
+                ExpenseParticipant ent = existingByUser.get(uid);
+                // if share changed, update
+                if (ent.getShareAmount().compareTo(newShare) != 0) {
+                    // Delete any existing participant row for this expense+user and insert the new value deterministically
+                    participantRepo.deleteByExpense_IdAndUserId(expenseId, uid);
+                    participantRepo.flush();
+                    participantRepo.save(new ExpenseParticipant(ex, uid, newShare));
+                }
+                // mark as processed
+                existingByUser.remove(uid);
+            } else {
+                // insert new participant (no optimistic exists checks here; existingByUser was built from DB snapshot above)
+                participantRepo.deleteByExpense_IdAndUserId(expenseId, uid);
+                participantRepo.flush();
+                participantRepo.save(new ExpenseParticipant(ex, uid, newShare));
+            }
+        }
+
+        // Any remaining in existingByUser are participants removed in the update -> delete and revert ledger
+        for (ExpenseParticipant removed : existingByUser.values()) {
+            Long uid = removed.getUserId();
+            BigDecimal oldShare = removed.getShareAmount();
+            // revert ledger: add oldShare (oldShare - 0)
+            LedgerEntry le = ledger(groupId, uid);
+            le.add(oldShare);
+            ledgerRepo.save(le);
+            participantRepo.delete(removed);
         }
 
         // update expense record
