@@ -31,22 +31,22 @@ public class ExpenseController {
                                     @io.swagger.v3.oas.annotations.media.ExampleObject(
                                             name = "EqualSplit",
                                             summary = "Equal split among provided participants",
-                                            value = "{\"description\":\"Groceries\",\"amount\":\"30.75\",\"paidByUserId\":10,\"participantUserIds\":[10,11,12]}"
+                                            value = "{\"description\":\"Groceries\",\"amount\":\"30.75\",\"payerUserId\":10,\"participantUserIds\":[10,11,12]}"
                                     ),
                                     @io.swagger.v3.oas.annotations.media.ExampleObject(
                                             name = "Shares",
                                             summary = "Split by integer shares (weights)",
-                                            value = "{\"description\":\"Dinner\",\"amount\":\"40.00\",\"paidByUserId\":5,\"participantUserIds\":[5,6,7],\"shares\":[2,1,1]}"
+                                            value = "{\"description\":\"Dinner\",\"amount\":\"40.00\",\"payerUserId\":5,\"participantUserIds\":[5,6,7],\"shares\":[2,1,1]}"
                                     ),
                                     @io.swagger.v3.oas.annotations.media.ExampleObject(
                                             name = "ExactAmounts",
                                             summary = "Split by exact amounts (must sum to total within $0.01)",
-                                            value = "{\"description\":\"Party\",\"amount\":\"30.75\",\"paidByUserId\":2,\"participantUserIds\":[2,3,4],\"exactAmounts\":[\"15.50\",\"10.00\",\"5.25\"]}"
+                                            value = "{\"description\":\"Party\",\"amount\":\"30.75\",\"payerUserId\":2,\"participantUserIds\":[2,3,4],\"exactAmounts\":[\"15.50\",\"10.00\",\"5.25\"]}"
                                     ),
                                     @io.swagger.v3.oas.annotations.media.ExampleObject(
                                             name = "Percentages",
                                             summary = "Split by percentages (must sum to 100)",
-                                            value = "{\"description\":\"Rent\",\"amount\":\"1200.00\",\"paidByUserId\":8,\"participantUserIds\":[8,9,10],\"percentages\":[\"50.00\",\"25.00\",\"25.00\"]}"
+                                            value = "{\"description\":\"Rent\",\"amount\":\"1200.00\",\"payerUserId\":8,\"participantUserIds\":[8,9,10],\"percentages\":[\"50.00\",\"25.00\",\"25.00\"]}"
                                     )
                             }
                     )

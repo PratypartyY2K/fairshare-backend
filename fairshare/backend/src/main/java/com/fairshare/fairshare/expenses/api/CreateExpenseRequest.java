@@ -33,7 +33,7 @@ public class CreateExpenseRequest {
     @NotNull
     @JsonProperty("payerUserId")
     @JsonAlias("paidByUserId")
-    @Schema(description = "User id who paid the expense (JSON allows 'paidByUserId' or 'payerUserId')", example = "10")
+    @Schema(description = "User id who paid the expense. `paidByUserId` is deprecated; use `payerUserId`.", example = "10")
     private Long payerUserId;
 
     // participants can be omitted -> default to all group members
