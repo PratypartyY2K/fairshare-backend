@@ -36,29 +36,29 @@ public class EventsAndTransfersIntegrationTest {
         String gresp = mvc.perform(post("/groups").contentType(MediaType.APPLICATION_JSON).content(group)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long gid = mapper.readTree(gresp).get("id").asLong();
 
-        String m1 = "{\"name\":\"p\"}"; // Changed userName to name
+        String m1 = "{\"name\":\"p\"}";
         Long p = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
 
-        String m2 = "{\"name\":\"q\"}"; // Changed userName to name
+        String m2 = "{\"name\":\"q\"}";
         Long q = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
 
         // create expense
-        String exp = String.format("{\"description\":\"Snack\",\"amount\":\"5.00\",\"payerUserId\":%d}", p); // Changed amount to string and paidByUserId to payerUserId
+        String exp = String.format("{\"description\":\"Snack\",\"amount\":\"5.00\",\"payerUserId\":%d}", p);
         String eres = mvc.perform(post("/groups/" + gid + "/expenses").contentType(MediaType.APPLICATION_JSON).content(exp)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         JsonNode en = mapper.readTree(eres);
-        assertThat(en.get("amount").decimalValue()).isEqualByComparingTo(new BigDecimal("5.00"));
+        assertThat(new BigDecimal(en.get("amount").asText())).isEqualByComparingTo(new BigDecimal("5.00"));
 
         // query events
         String events = mvc.perform(get("/groups/" + gid + "/events")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        JsonNode ev = mapper.readTree(events);
+        JsonNode ev = mapper.readTree(events).get("items");
         assertThat(ev.isArray()).isTrue();
         assertThat(ev.size()).isGreaterThanOrEqualTo(1);
 
         // confirm a transfer
         String confirmationId = "audit-confirm-1";
-        String body = String.format("{\"confirmationId\":\"%s\",\"transfers\":[{\"fromUserId\":%d,\"toUserId\":%d,\"amount\":\"1.00\"}]}", confirmationId, p, q); // Changed amount to string
+        String body = String.format("{\"confirmationId\":\"%s\",\"transfers\":[{\"fromUserId\":%d,\"toUserId\":%d,\"amount\":\"1.00\"}]}", confirmationId, p, q);
         MvcResult result = mvc.perform(post("/groups/" + gid + "/settlements/confirm").contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isOk()) // Changed to isOk()
+                .andExpect(status().isOk())
                 .andReturn();
         ConfirmSettlementsResponse resp = mapper.readValue(result.getResponse().getContentAsString(), ConfirmSettlementsResponse.class);
         assertThat(resp.confirmationId()).isEqualTo(confirmationId);
@@ -67,13 +67,13 @@ public class EventsAndTransfersIntegrationTest {
 
         // query confirmed transfers
         String cts = mvc.perform(get("/groups/" + gid + "/confirmed-transfers")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        JsonNode ctNode = mapper.readTree(cts);
+        JsonNode ctNode = mapper.readTree(cts).get("items");
         assertThat(ctNode.isArray()).isTrue();
         assertThat(ctNode.size()).isGreaterThanOrEqualTo(1);
 
         // query by confirmationId
         String cts2 = mvc.perform(get("/groups/" + gid + "/confirmed-transfers?confirmationId=" + confirmationId)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        JsonNode ctNode2 = mapper.readTree(cts2);
+        JsonNode ctNode2 = mapper.readTree(cts2).get("items");
         assertThat(ctNode2.isArray()).isTrue();
         assertThat(ctNode2.size()).isGreaterThanOrEqualTo(1);
     }

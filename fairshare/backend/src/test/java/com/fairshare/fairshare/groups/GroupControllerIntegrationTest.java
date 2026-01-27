@@ -41,7 +41,7 @@ public class GroupControllerIntegrationTest {
         assertThat(node.get("name").asText()).isEqualTo("Test Group");
 
         // add member
-        String addMem = "{\"name\":\"alice\"}"; // Changed userName to name
+        String addMem = "{\"name\":\"alice\"}";
         String addResp = mvc.perform(post("/groups/" + id + "/members")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(addMem))
@@ -70,15 +70,18 @@ public class GroupControllerIntegrationTest {
         assertThat(patchedNode.get("name").asText()).isEqualTo("Renamed");
 
         // list groups includes our group
-        String list = mvc.perform(get("/groups"))
+        String list = mvc.perform(get("/groups?size=100")) // Added size=100 to fetch all groups
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         JsonNode paginatedResponse = mapper.readTree(list);
-        JsonNode arr = paginatedResponse.get("items"); // Access the 'items' field for the actual list
+        JsonNode arr = paginatedResponse.get("items");
         assertThat(arr.isArray()).isTrue();
         boolean found = false;
         for (JsonNode g : arr) {
-            if (g.get("id").asLong() == id) found = true;
+            if (g.get("id").asLong() == id) {
+                found = true;
+                break;
+            }
         }
         assertThat(found).isTrue();
     }

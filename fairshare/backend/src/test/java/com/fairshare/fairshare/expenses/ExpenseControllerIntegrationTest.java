@@ -58,7 +58,7 @@ public class ExpenseControllerIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         JsonNode enode = mapper.readTree(eresp);
-        assertThat(enode.get("amount").decimalValue()).isEqualByComparingTo(new BigDecimal("30.00"));
+        assertThat(new BigDecimal(enode.get("amount").asText())).isEqualByComparingTo(new BigDecimal("30.00"));
 
         // list ledger
         String ledger = mvc.perform(get("/groups/" + gid + "/ledger")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -88,7 +88,7 @@ public class ExpenseControllerIntegrationTest {
             String owes = mvc.perform(get("/groups/" + gid + "/owes/historical?fromUserId=" + from + "&toUserId=" + to)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
             JsonNode ow = mapper.readTree(owes);
             // amount should be >= 0
-            assertThat(ow.get("amount").decimalValue().signum()).isGreaterThanOrEqualTo(0);
+            assertThat(new BigDecimal(ow.get("amount").asText()).signum()).isGreaterThanOrEqualTo(0);
         }
     }
 
@@ -126,16 +126,16 @@ public class ExpenseControllerIntegrationTest {
         JsonNode enode = mapper.readTree(eresp);
 
         // verify amount and splits sum to total
-        BigDecimal total = enode.get("amount").decimalValue();
+        BigDecimal total = new BigDecimal(enode.get("amount").asText());
         BigDecimal sum = BigDecimal.ZERO;
         for (JsonNode s : enode.get("splits")) {
-            sum = sum.add(s.get("shareAmount").decimalValue());
+            sum = sum.add(new BigDecimal(s.get("shareAmount").asText()));
         }
         assertThat(total).isEqualByComparingTo(sum);
 
         // verify each split has scale 2
         for (JsonNode s : enode.get("splits")) {
-            BigDecimal v = s.get("shareAmount").decimalValue();
+            BigDecimal v = new BigDecimal(s.get("shareAmount").asText());
             assertThat(v.scale()).isEqualTo(2);
         }
     }
@@ -221,7 +221,7 @@ public class ExpenseControllerIntegrationTest {
         Long d = mapper.readTree(r1).get("userId").asLong();
 
         // create expense with both shares and percentages
-        String exp = String.format("{\"description\":\"Invalid Expense\",\"amount\":\"100.00\",\"payerUserId\":%d,\"participantUserIds\":[%d],\"shares\":[1],\"percentages\":[100]}", d, d);
+        String exp = String.format("{\"description\":\"Invalid Expense\",\"amount\":\"100.00\",\"payerUserId\":%d,\"participantUserIds\":[%d],\"shares\":[1],\"percentages\":[\"100\"]}", d, d);
         mvc.perform(post("/groups/" + gid + "/expenses").contentType(MediaType.APPLICATION_JSON).content(exp))
                 .andExpect(status().isBadRequest());
     }
