@@ -45,7 +45,7 @@ public class GroupController {
     public PaginatedResponse<GroupResponse> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "name,asc") String sort
+            @RequestParam(defaultValue = "id,desc") String sort
     ) {
         return service.listGroups(page, size, sort);
     }

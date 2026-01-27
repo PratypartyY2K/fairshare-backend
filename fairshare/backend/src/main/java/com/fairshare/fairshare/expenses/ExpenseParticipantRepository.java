@@ -10,9 +10,9 @@ import java.util.List;
 
 @Repository
 public interface ExpenseParticipantRepository extends JpaRepository<ExpenseParticipant, Long> {
-    List<ExpenseParticipant> findByExpenseId(Long expenseId);
+    List<ExpenseParticipant> findByExpense_Id(Long expenseId);
 
-    void deleteByExpenseIdAndUserId(Long expenseId, Long userId);
+    void deleteByExpense_Id(Long expenseId);
 
     @Query("SELECT COALESCE(SUM(ep.shareAmount), 0) FROM ExpenseParticipant ep JOIN ep.expense e WHERE e.groupId = ?1 AND e.payerUserId = ?2 AND ep.userId = ?3")
     BigDecimal sumShareByGroupAndPayerAndUser(Long groupId, Long payerUserId, Long participantUserId);

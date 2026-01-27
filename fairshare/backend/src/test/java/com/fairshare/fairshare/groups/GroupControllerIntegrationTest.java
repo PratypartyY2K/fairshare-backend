@@ -70,7 +70,7 @@ public class GroupControllerIntegrationTest {
         assertThat(patchedNode.get("name").asText()).isEqualTo("Renamed");
 
         // list groups includes our group
-        String list = mvc.perform(get("/groups?size=100")) // Added size=100 to fetch all groups
+        String list = mvc.perform(get("/groups?size=100")) // Fetch all groups
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         JsonNode paginatedResponse = mapper.readTree(list);

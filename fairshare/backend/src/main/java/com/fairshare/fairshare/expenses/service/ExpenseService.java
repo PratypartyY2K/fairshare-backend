@@ -90,7 +90,7 @@ public class ExpenseService {
                 Expense ex = existing.get();
                 // rebuild shares map from participantRepo
                 Map<Long, BigDecimal> shares = new LinkedHashMap<>();
-                for (ExpenseParticipant p : participantRepo.findByExpenseId(ex.getId())) {
+                for (ExpenseParticipant p : participantRepo.findByExpense_Id(ex.getId())) {
                     shares.put(p.getUserId(), p.getShareAmount());
                 }
                 return toExpenseResponse(ex, shares);
@@ -318,7 +318,7 @@ public class ExpenseService {
         List<ExpenseResponse> expenseResponses = new ArrayList<>();
         for (Expense ex : expensesPage.getContent()) {
             Map<Long, BigDecimal> shares = new LinkedHashMap<>();
-            for (ExpenseParticipant p : participantRepo.findByExpenseId(ex.getId())) {
+            for (ExpenseParticipant p : participantRepo.findByExpense_Id(ex.getId())) {
                 shares.put(p.getUserId(), p.getShareAmount());
             }
             expenseResponses.add(toExpenseResponse(ex, shares));
@@ -499,7 +499,7 @@ public class ExpenseService {
 
         // build current shares
         Map<Long, BigDecimal> oldShares = new LinkedHashMap<>();
-        for (ExpenseParticipant p : participantRepo.findByExpenseId(expenseId))
+        for (ExpenseParticipant p : participantRepo.findByExpense_Id(expenseId))
             oldShares.put(p.getUserId(), p.getShareAmount());
         BigDecimal oldTotal = ex.getAmount();
 
@@ -593,19 +593,11 @@ public class ExpenseService {
         for (Long id : newShares.keySet())
             oldSharesDefault.putIfAbsent(id, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
 
+        // Delete old participants and insert new ones
+        participantRepo.deleteByExpense_Id(expenseId);
         for (Map.Entry<Long, BigDecimal> en : newShares.entrySet()) {
             Long uid = en.getKey();
             BigDecimal newShare = normalizeCurrency(en.getValue());
-            BigDecimal oldShare = oldSharesDefault.getOrDefault(uid, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            BigDecimal delta = oldShare.negate().add(newShare.negate()).negate();
-            // Actually ledger on participant stored negative of share, so to adjust ledger we add -(newShare) - (-(oldShare)) = oldShare - newShare
-            BigDecimal ledgerDelta = oldShare.subtract(newShare);
-            LedgerEntry le = ledger(groupId, uid);
-            le.add(ledgerDelta);
-            ledgerRepo.save(le);
-
-            // upsert participant record
-            participantRepo.deleteByExpenseIdAndUserId(expenseId, uid);
             participantRepo.save(new ExpenseParticipant(ex, uid, newShare));
         }
 
@@ -629,7 +621,7 @@ public class ExpenseService {
 
         // fetch participants
         Map<Long, BigDecimal> shares = new LinkedHashMap<>();
-        for (ExpenseParticipant p : participantRepo.findByExpenseId(expenseId))
+        for (ExpenseParticipant p : participantRepo.findByExpense_Id(expenseId))
             shares.put(p.getUserId(), p.getShareAmount());
 
         // reverse ledger entries
