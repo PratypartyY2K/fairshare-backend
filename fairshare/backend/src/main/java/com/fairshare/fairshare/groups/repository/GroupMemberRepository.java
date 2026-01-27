@@ -1,5 +1,6 @@
-package com.fairshare.fairshare.groups;
+package com.fairshare.fairshare.groups.repository;
 
+import com.fairshare.fairshare.groups.model.GroupMember;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 

@@ -2,9 +2,9 @@ package com.fairshare.fairshare.groups.service;
 
 import com.fairshare.fairshare.common.api.PaginatedResponse;
 import com.fairshare.fairshare.groups.Group;
-import com.fairshare.fairshare.groups.GroupMember;
-import com.fairshare.fairshare.groups.GroupMemberRepository;
-import com.fairshare.fairshare.groups.GroupRepository;
+import com.fairshare.fairshare.groups.model.GroupMember;
+import com.fairshare.fairshare.groups.repository.GroupMemberRepository;
+import com.fairshare.fairshare.groups.repository.GroupRepository;
 import com.fairshare.fairshare.groups.api.AddMemberResponse;
 import com.fairshare.fairshare.groups.api.dto.GroupResponse;
 import com.fairshare.fairshare.groups.api.dto.MemberResponse;
@@ -86,7 +86,7 @@ public class GroupService {
     public PaginatedResponse<GroupResponse> listGroups(int page, int size, String sort) {
         String[] sortParams = sort.split(",");
         Sort sortOrder = Sort.by(Sort.Direction.fromString(sortParams[1]), sortParams[0]);
-        PageRequest pageRequest = Page.of(page, size, sortOrder);
+        PageRequest pageRequest = PageRequest.of(page, size, sortOrder);
 
         Page<Group> groupPage = groupRepo.findAll(pageRequest);
 

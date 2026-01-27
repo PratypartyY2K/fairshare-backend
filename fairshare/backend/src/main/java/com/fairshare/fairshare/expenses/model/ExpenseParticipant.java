@@ -1,5 +1,6 @@
 package com.fairshare.fairshare.expenses.model;
 
+import com.fairshare.fairshare.expenses.Expense;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
@@ -14,8 +15,9 @@ public class ExpenseParticipant {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "expense_id", nullable = false)
-    private Long expenseId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "expense_id", nullable = false)
+    private Expense expense;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
@@ -26,8 +28,8 @@ public class ExpenseParticipant {
     protected ExpenseParticipant() {
     }
 
-    public ExpenseParticipant(Long expenseId, Long userId, BigDecimal shareAmount) {
-        this.expenseId = expenseId;
+    public ExpenseParticipant(Expense expense, Long userId, BigDecimal shareAmount) {
+        this.expense = expense;
         this.userId = userId;
         this.shareAmount = shareAmount;
     }
@@ -36,8 +38,8 @@ public class ExpenseParticipant {
         return id;
     }
 
-    public Long getExpenseId() {
-        return expenseId;
+    public Expense getExpense() {
+        return expense;
     }
 
     public Long getUserId() {

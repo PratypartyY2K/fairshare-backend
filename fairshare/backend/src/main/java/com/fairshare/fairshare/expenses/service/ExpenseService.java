@@ -11,11 +11,12 @@ import com.fairshare.fairshare.expenses.ExpenseParticipantRepository;
 import com.fairshare.fairshare.expenses.ConfirmedTransferRepository;
 import com.fairshare.fairshare.expenses.ExpenseEventRepository;
 import com.fairshare.fairshare.expenses.api.*;
-import com.fairshare.fairshare.groups.GroupMemberRepository;
+import com.fairshare.fairshare.groups.repository.GroupMemberRepository;
 import com.fairshare.fairshare.expenses.model.ConfirmedTransfer;
 import com.fairshare.fairshare.expenses.model.ExpenseEvent;
 import com.fairshare.fairshare.expenses.model.ExpenseParticipant;
 import com.fairshare.fairshare.groups.model.GroupMember;
+import com.fairshare.fairshare.expenses.SettlementCalculator;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -233,7 +234,7 @@ public class ExpenseService {
         for (var e : sharesMap.entrySet()) {
             // ensure stored shares are scale-2
             BigDecimal normalizedShare = normalizeCurrency(e.getValue());
-            participantRepo.save(new ExpenseParticipant(expense.getId(), e.getKey(), normalizedShare));
+            participantRepo.save(new ExpenseParticipant(expense, e.getKey(), normalizedShare));
         }
 
         // Ledger updates
@@ -605,7 +606,7 @@ public class ExpenseService {
 
             // upsert participant record
             participantRepo.deleteByExpenseIdAndUserId(expenseId, uid);
-            participantRepo.save(new ExpenseParticipant(expenseId, uid, newShare));
+            participantRepo.save(new ExpenseParticipant(ex, uid, newShare));
         }
 
         // update expense record

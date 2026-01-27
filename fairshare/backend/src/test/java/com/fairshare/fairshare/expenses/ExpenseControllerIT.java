@@ -3,7 +3,7 @@ package com.fairshare.fairshare.expenses;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fairshare.fairshare.expenses.api.CreateExpenseRequest;
 import com.fairshare.fairshare.expenses.api.ConfirmSettlementsRequest;
-import com.fairshare.fairshare.groups.api.CreateGroupRequest;
+import com.fairshare.fairshare.groups.api.dto.CreateGroupRequest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -40,8 +40,8 @@ public class ExpenseControllerIT {
         Long gid = groupJson.get("id").asLong();
 
         // add two members
-        var addA = new com.fairshare.fairshare.groups.api.AddMemberRequest("Bob");
-        var addB = new com.fairshare.fairshare.groups.api.AddMemberRequest("Carol");
+        var addA = new com.fairshare.fairshare.groups.api.dto.AddMemberRequest("Bob");
+        var addB = new com.fairshare.fairshare.groups.api.dto.AddMemberRequest("Carol");
 
         var r1 = mvc.perform(post(String.format("/groups/%d/members", gid))
                         .contentType(MediaType.APPLICATION_JSON)
