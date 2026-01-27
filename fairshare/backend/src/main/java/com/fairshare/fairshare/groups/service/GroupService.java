@@ -36,11 +36,11 @@ public class GroupService {
     }
 
     @Transactional
-    public AddMemberResponse addMember(Long groupId, String userName) {
+    public AddMemberResponse addMember(Long groupId, String name) {
         Group group = groupRepo.findById(groupId)
                 .orElseThrow(() -> new IllegalArgumentException("Group not found"));
 
-        String trimmed = userName.trim();
+        String trimmed = name.trim();
         User user = userRepo.save(new User(trimmed));
 
         if (!memberRepo.existsByGroupIdAndUserId(group.getId(), user.getId())) {
@@ -86,7 +86,7 @@ public class GroupService {
     public PaginatedResponse<GroupResponse> listGroups(int page, int size, String sort) {
         String[] sortParams = sort.split(",");
         Sort sortOrder = Sort.by(Sort.Direction.fromString(sortParams[1]), sortParams[0]);
-        PageRequest pageRequest = PageRequest.of(page, size, sortOrder);
+        PageRequest pageRequest = Page.of(page, size, sortOrder);
 
         Page<Group> groupPage = groupRepo.findAll(pageRequest);
 

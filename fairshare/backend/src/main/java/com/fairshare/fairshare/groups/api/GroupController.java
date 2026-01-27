@@ -33,7 +33,7 @@ public class GroupController {
     @PostMapping("/{groupId}/members")
     @ResponseStatus(HttpStatus.CREATED)
     public AddMemberResponse addMember(@PathVariable Long groupId, @Valid @RequestBody AddMemberRequest req) {
-        return service.addMember(groupId, req.userName());
+        return service.addMember(groupId, req.name());
     }
 
     @GetMapping("/{groupId}")
