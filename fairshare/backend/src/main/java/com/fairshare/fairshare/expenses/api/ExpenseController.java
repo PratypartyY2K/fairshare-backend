@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/groups/{groupId}")
@@ -106,12 +107,11 @@ public class ExpenseController {
         service.confirmSettlements(groupId, req);
     }
 
-    @GetMapping("/confirmation-id")
+    @GetMapping("/api/confirmation-id") // Changed to a global path
     @io.swagger.v3.oas.annotations.Operation(summary = "Generate a confirmation id (UUID)", description = "Return a fresh confirmation id to be used by the client when confirming settlements; handy for a 'Generate ID' button")
-    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK")
-    public java.util.Map<String, String> generateConfirmationId(@PathVariable Long groupId) {
-        String id = java.util.UUID.randomUUID().toString();
-        return java.util.Collections.singletonMap("confirmationId", id);
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ConfirmationIdResponse.class)))
+    public ConfirmationIdResponse generateConfirmationId() { // Removed @PathVariable Long groupId
+        return new ConfirmationIdResponse(UUID.randomUUID().toString());
     }
 
     @GetMapping("/owes")
