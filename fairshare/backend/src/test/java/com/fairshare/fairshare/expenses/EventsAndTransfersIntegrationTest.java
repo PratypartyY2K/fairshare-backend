@@ -2,6 +2,7 @@ package com.fairshare.fairshare.expenses;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fairshare.fairshare.expenses.api.ConfirmSettlementsResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +10,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.math.BigDecimal;
 
@@ -34,14 +36,14 @@ public class EventsAndTransfersIntegrationTest {
         String gresp = mvc.perform(post("/groups").contentType(MediaType.APPLICATION_JSON).content(group)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long gid = mapper.readTree(gresp).get("id").asLong();
 
-        String m1 = "{\"userName\":\"p\"}";
+        String m1 = "{\"name\":\"p\"}"; // Changed userName to name
         Long p = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
 
-        String m2 = "{\"userName\":\"q\"}";
+        String m2 = "{\"name\":\"q\"}"; // Changed userName to name
         Long q = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
 
         // create expense
-        String exp = String.format("{\"description\":\"Snack\",\"amount\":5.00,\"paidByUserId\":%d}", p);
+        String exp = String.format("{\"description\":\"Snack\",\"amount\":\"5.00\",\"payerUserId\":%d}", p); // Changed amount to string and paidByUserId to payerUserId
         String eres = mvc.perform(post("/groups/" + gid + "/expenses").contentType(MediaType.APPLICATION_JSON).content(exp)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         JsonNode en = mapper.readTree(eres);
         assertThat(en.get("amount").decimalValue()).isEqualByComparingTo(new BigDecimal("5.00"));
@@ -54,8 +56,14 @@ public class EventsAndTransfersIntegrationTest {
 
         // confirm a transfer
         String confirmationId = "audit-confirm-1";
-        String body = String.format("{\"confirmationId\":\"%s\",\"transfers\":[{\"fromUserId\":%d,\"toUserId\":%d,\"amount\":1.00}]}", confirmationId, p, q);
-        mvc.perform(post("/groups/" + gid + "/settlements/confirm").contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isNoContent());
+        String body = String.format("{\"confirmationId\":\"%s\",\"transfers\":[{\"fromUserId\":%d,\"toUserId\":%d,\"amount\":\"1.00\"}]}", confirmationId, p, q); // Changed amount to string
+        MvcResult result = mvc.perform(post("/groups/" + gid + "/settlements/confirm").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()) // Changed to isOk()
+                .andReturn();
+        ConfirmSettlementsResponse resp = mapper.readValue(result.getResponse().getContentAsString(), ConfirmSettlementsResponse.class);
+        assertThat(resp.confirmationId()).isEqualTo(confirmationId);
+        assertThat(resp.appliedTransfersCount()).isEqualTo(1);
+
 
         // query confirmed transfers
         String cts = mvc.perform(get("/groups/" + gid + "/confirmed-transfers")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();

@@ -41,7 +41,7 @@ public class GroupControllerIntegrationTest {
         assertThat(node.get("name").asText()).isEqualTo("Test Group");
 
         // add member
-        String addMem = "{\"userName\":\"alice\"}";
+        String addMem = "{\"name\":\"alice\"}"; // Changed userName to name
         String addResp = mvc.perform(post("/groups/" + id + "/members")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(addMem))
@@ -73,7 +73,8 @@ public class GroupControllerIntegrationTest {
         String list = mvc.perform(get("/groups"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        JsonNode arr = mapper.readTree(list);
+        JsonNode paginatedResponse = mapper.readTree(list);
+        JsonNode arr = paginatedResponse.get("items"); // Access the 'items' field for the actual list
         assertThat(arr.isArray()).isTrue();
         boolean found = false;
         for (JsonNode g : arr) {

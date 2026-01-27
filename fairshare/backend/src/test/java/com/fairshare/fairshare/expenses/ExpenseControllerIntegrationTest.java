@@ -2,6 +2,7 @@ package com.fairshare.fairshare.expenses;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fairshare.fairshare.expenses.api.ConfirmSettlementsResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +10,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.math.BigDecimal;
 
@@ -40,18 +42,18 @@ public class ExpenseControllerIntegrationTest {
         Long gid = gnode.get("id").asLong();
 
         // add two members
-        String m1 = "{\"userName\":\"alice\"}";
+        String m1 = "{\"name\":\"alice\"}";
         String r1 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         JsonNode rn1 = mapper.readTree(r1);
         Long aliceId = rn1.get("userId").asLong();
 
-        String m2 = "{\"userName\":\"bob\"}";
+        String m2 = "{\"name\":\"bob\"}";
         String r2 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         JsonNode rn2 = mapper.readTree(r2);
         Long bobId = rn2.get("userId").asLong();
 
         // create expense with payer alice and participants omitted (defaults to all members)
-        String exp = String.format("{\"description\":\"Lunch\",\"amount\":30.00,\"paidByUserId\":%d}", aliceId);
+        String exp = String.format("{\"description\":\"Lunch\",\"amount\":\"30.00\",\"payerUserId\":%d}", aliceId);
         String eresp = mvc.perform(post("/groups/" + gid + "/expenses").contentType(MediaType.APPLICATION_JSON).content(exp))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
@@ -73,10 +75,14 @@ public class ExpenseControllerIntegrationTest {
             JsonNode first = sn.get("transfers").get(0);
             Long from = first.get("fromUserId").asLong();
             Long to = first.get("toUserId").asLong();
-            String amt = first.get("amount").decimalValue().toString();
-            String confirm = String.format("{\"transfers\":[{\"fromUserId\":%d,\"toUserId\":%d,\"amount\":%s}]}", from, to, amt);
-            mvc.perform(post("/groups/" + gid + "/settlements/confirm").contentType(MediaType.APPLICATION_JSON).content(confirm))
-                    .andExpect(status().isNoContent());
+            String amt = first.get("amount").asText();
+            String confirm = String.format("{\"transfers\":[{\"fromUserId\":%d,\"toUserId\":%d,\"amount\":\"%s\"}]}", from, to, amt);
+            MvcResult result = mvc.perform(post("/groups/" + gid + "/settlements/confirm").contentType(MediaType.APPLICATION_JSON).content(confirm))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            ConfirmSettlementsResponse resp = mapper.readValue(result.getResponse().getContentAsString(), ConfirmSettlementsResponse.class);
+            assertThat(resp.appliedTransfersCount()).isEqualTo(1);
+
 
             // outstanding owed historical should now reflect confirmed transfer
             String owes = mvc.perform(get("/groups/" + gid + "/owes/historical?fromUserId=" + from + "&toUserId=" + to)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -100,20 +106,20 @@ public class ExpenseControllerIntegrationTest {
         Long gid = gnode.get("id").asLong();
 
         // add three members
-        String m1 = "{\"userName\":\"a\"}";
+        String m1 = "{\"name\":\"a\"}";
         String r1 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long a = mapper.readTree(r1).get("userId").asLong();
 
-        String m2 = "{\"userName\":\"b\"}";
+        String m2 = "{\"name\":\"b\"}";
         String r2 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long b = mapper.readTree(r2).get("userId").asLong();
 
-        String m3 = "{\"userName\":\"c\"}";
+        String m3 = "{\"name\":\"c\"}";
         String r3 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m3)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long c = mapper.readTree(r3).get("userId").asLong();
 
         // create expense of 100.00 with percentages [33.33,33.33,33.34]
-        String exp = String.format("{\"description\":\"Bill\",\"amount\":100.00,\"paidByUserId\":%d,\"participantUserIds\":[%d,%d,%d],\"percentages\":[33.33,33.33,33.34]}", a, a, b, c);
+        String exp = String.format("{\"description\":\"Bill\",\"amount\":\"100.00\",\"payerUserId\":%d,\"participantUserIds\":[%d,%d,%d],\"percentages\":[\"33.33\",\"33.33\",\"33.34\"]}", a, a, b, c);
         String eresp = mvc.perform(post("/groups/" + gid + "/expenses").contentType(MediaType.APPLICATION_JSON).content(exp))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
@@ -148,16 +154,16 @@ public class ExpenseControllerIntegrationTest {
         Long gid = gnode.get("id").asLong();
 
         // add two members
-        String m1 = "{\"userName\":\"alice\"}";
+        String m1 = "{\"name\":\"alice\"}";
         String r1 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long aliceId = mapper.readTree(r1).get("userId").asLong();
 
-        String m2 = "{\"userName\":\"bob\"}";
+        String m2 = "{\"name\":\"bob\"}";
         String r2 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long bobId = mapper.readTree(r2).get("userId").asLong();
 
         String key = "test-idempotency-123";
-        String expBody = String.format("{\"description\":\"Coffee\",\"amount\":5.00,\"paidByUserId\":%d}", aliceId);
+        String expBody = String.format("{\"description\":\"Coffee\",\"amount\":\"5.00\",\"payerUserId\":%d}", aliceId);
 
         // First POST
         String first = mvc.perform(post("/groups/" + gid + "/expenses")
@@ -188,11 +194,35 @@ public class ExpenseControllerIntegrationTest {
         String list = mvc.perform(get("/groups/" + gid + "/expenses"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        JsonNode arr = mapper.readTree(list);
+        JsonNode arr = mapper.readTree(list).get("items");
         int count = 0;
         for (JsonNode e : arr) {
             if (e.get("expenseId").asLong() == firstId) count++;
         }
         assertThat(count).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Creating an expense with multiple split modes should fail")
+    void createExpenseWithMultipleSplitModes() throws Exception {
+        // create group
+        String group = "{\"name\":\"MultiSplitGroup\"}";
+        String gresp = mvc.perform(post("/groups")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(group))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode gnode = mapper.readTree(gresp);
+        Long gid = gnode.get("id").asLong();
+
+        // add members
+        String m1 = "{\"name\":\"d\"}";
+        String r1 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        Long d = mapper.readTree(r1).get("userId").asLong();
+
+        // create expense with both shares and percentages
+        String exp = String.format("{\"description\":\"Invalid Expense\",\"amount\":\"100.00\",\"payerUserId\":%d,\"participantUserIds\":[%d],\"shares\":[1],\"percentages\":[100]}", d, d);
+        mvc.perform(post("/groups/" + gid + "/expenses").contentType(MediaType.APPLICATION_JSON).content(exp))
+                .andExpect(status().isBadRequest());
     }
 }
