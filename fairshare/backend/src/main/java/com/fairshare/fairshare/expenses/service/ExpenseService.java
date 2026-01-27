@@ -1,7 +1,14 @@
-package com.fairshare.fairshare.expenses;
+package com.fairshare.fairshare.expenses.service;
 
 import com.fairshare.fairshare.common.BadRequestException;
 import com.fairshare.fairshare.common.NotFoundException;
+import com.fairshare.fairshare.expenses.Expense;
+import com.fairshare.fairshare.expenses.ExpenseRepository;
+import com.fairshare.fairshare.expenses.LedgerEntry;
+import com.fairshare.fairshare.expenses.LedgerEntryRepository;
+import com.fairshare.fairshare.expenses.ExpenseParticipantRepository;
+import com.fairshare.fairshare.expenses.ConfirmedTransferRepository;
+import com.fairshare.fairshare.expenses.ExpenseEventRepository;
 import com.fairshare.fairshare.expenses.api.CreateExpenseRequest;
 import com.fairshare.fairshare.expenses.api.ExpenseResponse;
 import com.fairshare.fairshare.expenses.api.LedgerResponse;
@@ -213,7 +220,7 @@ public class ExpenseService {
         }
 
         // persist creation event
-        String createdPayload = String.format("{\"expenseId\":%d,\"amount\":%s}", expense.getId(), expense.getAmount().toString());
+        String createdPayload = String.format("{\"expenseId\":%d,\"amount\":\"%s\"}", expense.getId(), expense.getAmount().toString());
         eventRepo.save(new ExpenseEvent(groupId, expense.getId(), "ExpenseCreated", createdPayload));
 
         return toExpenseResponse(expense, sharesMap);
@@ -527,7 +534,7 @@ public class ExpenseService {
         expenseRepo.save(ex);
 
         // persist event
-        String payload = String.format("{\"before\":{\"amount\":%s},\"after\":{\"amount\":%s}}", oldTotal.toString(), totalAmount.toString());
+        String payload = String.format("{\"before\":{\"amount\":\"%s\"},\"after\":{\"amount\":\"%s\"}}", oldTotal.toString(), totalAmount.toString());
         eventRepo.save(new ExpenseEvent(groupId, expenseId, "ExpenseUpdated", payload));
 
         return toExpenseResponse(ex, newShares);
@@ -561,7 +568,7 @@ public class ExpenseService {
         expenseRepo.save(ex);
 
         // persist event
-        String payload = String.format("{\"expenseId\":%d,\"amount\":%s}", expenseId, total.toString());
+        String payload = String.format("{\"expenseId\":%d,\"amount\":\"%s\"}", expenseId, total.toString());
         eventRepo.save(new ExpenseEvent(groupId, expenseId, "ExpenseVoided", payload));
     }
 

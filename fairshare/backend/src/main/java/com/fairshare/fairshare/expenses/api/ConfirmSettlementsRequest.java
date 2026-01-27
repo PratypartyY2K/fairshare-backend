@@ -1,5 +1,7 @@
 package com.fairshare.fairshare.expenses.api;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
@@ -42,6 +44,8 @@ public class ConfirmSettlementsRequest {
         private Long toUserId;
         @NotNull
         @Positive
+        @JsonFormat(shape = JsonFormat.Shape.STRING)
+        @Schema(type = "string", example = "10.00")
         private BigDecimal amount;
 
         public Transfer() {

@@ -1,6 +1,7 @@
 package com.fairshare.fairshare.expenses.api;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.*;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
@@ -25,7 +26,8 @@ public class CreateExpenseRequest {
 
     @NotNull
     @DecimalMin("0.01")
-    @Schema(description = "Total expense amount (two decimals)", example = "30.75")
+    @Schema(description = "Total expense amount (two decimals)", type = "string", example = "30.75")
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
     private BigDecimal amount;
 
     @NotNull
@@ -44,11 +46,13 @@ public class CreateExpenseRequest {
     private List<@Positive Integer> shares;
 
     // exact amounts list, corresponding to participants order
-    @ArraySchema(schema = @Schema(description = "Exact monetary amounts for participants (must sum to total ± $0.01). Order corresponds to participantUserIds. e.g., [7.25,2.75]", example = "[7.25,2.75]"))
+    @ArraySchema(schema = @Schema(description = "Exact monetary amounts for participants (must sum to total ± $0.01). Order corresponds to participantUserIds. e.g., [7.25,2.75]", type = "string", example = "[\"7.25\",\"2.75\"]"))
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
     private List<@NotNull BigDecimal> exactAmounts;
 
     // percentages list (0-100), corresponding to participants order
-    @ArraySchema(schema = @Schema(description = "Percentages for participants (must sum to 100% ± 0.01). Order corresponds to participantUserIds. e.g., [50,25,25]", example = "[50,25,25]"))
+    @ArraySchema(schema = @Schema(description = "Percentages for participants (must sum to 100% ± 0.01). Order corresponds to participantUserIds. e.g., [50,25,25]", type = "string", example = "[\"50.00\",\"25.00\",\"25.00\"]"))
+    @JsonFormat(shape = JsonFormat.Shape.STRING)
     private List<@NotNull BigDecimal> percentages;
 
     // Default constructor for Jackson
