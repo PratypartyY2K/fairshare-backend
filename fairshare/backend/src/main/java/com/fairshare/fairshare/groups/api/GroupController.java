@@ -45,9 +45,12 @@ public class GroupController {
     public PaginatedResponse<GroupResponse> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "id,desc") String sort
+            @RequestParam(defaultValue = "id,desc") String sort,
+            @RequestParam(name = "pageSize", required = false) Integer pageSize,
+            @RequestParam(name = "name", required = false) String name
     ) {
-        return service.listGroups(page, size, sort);
+        int effectiveSize = pageSize != null ? pageSize : size;
+        return service.listGroups(page, effectiveSize, sort, name);
     }
 
     @PatchMapping("/{groupId}")

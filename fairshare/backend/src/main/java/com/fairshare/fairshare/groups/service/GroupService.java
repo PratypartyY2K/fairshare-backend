@@ -1,5 +1,6 @@
 package com.fairshare.fairshare.groups.service;
 
+import com.fairshare.fairshare.common.SortUtils;
 import com.fairshare.fairshare.common.api.PaginatedResponse;
 import com.fairshare.fairshare.groups.Group;
 import com.fairshare.fairshare.groups.model.GroupMember;
@@ -81,12 +82,27 @@ public class GroupService {
         return new GroupResponse(saved.getId(), saved.getName(), members, members.size());
     }
 
-    public PaginatedResponse<GroupResponse> listGroups(int page, int size, String sort) {
-        String[] sortParams = sort.split(",");
-        Sort sortOrder = Sort.by(Sort.Direction.fromString(sortParams[1]), sortParams[0]);
+    public PaginatedResponse<GroupResponse> listGroups(int page, int size, String sort, String name) {
+        Sort sortOrder = SortUtils.parseSort(sort, "id,desc");
         PageRequest pageRequest = PageRequest.of(page, size, sortOrder);
 
-        Page<Group> groupPage = groupRepo.findAll(pageRequest);
+        Page<Group> groupPage;
+        if (name != null && !name.isBlank()) {
+            groupPage = groupRepo.findByNameContainingIgnoreCase(name.trim(), pageRequest);
+        } else {
+            groupPage = groupRepo.findAll(pageRequest);
+        }
+
+        // If the requested page is past the last page but there are results, return the last page
+        if (groupPage.getContent().isEmpty() && groupPage.getTotalPages() > 0 && page >= groupPage.getTotalPages()) {
+            int lastPage = groupPage.getTotalPages() - 1;
+            PageRequest lastPageRequest = PageRequest.of(lastPage, size, sortOrder);
+            if (name != null && !name.isBlank()) {
+                groupPage = groupRepo.findByNameContainingIgnoreCase(name.trim(), lastPageRequest);
+            } else {
+                groupPage = groupRepo.findAll(lastPageRequest);
+            }
+        }
 
         List<GroupResponse> groupResponses = groupPage.getContent().stream()
                 .map(g -> {

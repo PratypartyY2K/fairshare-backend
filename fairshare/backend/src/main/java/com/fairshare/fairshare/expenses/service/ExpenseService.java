@@ -2,6 +2,7 @@ package com.fairshare.fairshare.expenses.service;
 
 import com.fairshare.fairshare.common.BadRequestException;
 import com.fairshare.fairshare.common.NotFoundException;
+import com.fairshare.fairshare.common.SortUtils;
 import com.fairshare.fairshare.common.api.PaginatedResponse;
 import com.fairshare.fairshare.expenses.Expense;
 import com.fairshare.fairshare.expenses.ExpenseRepository;
@@ -311,7 +312,7 @@ public class ExpenseService {
 
     @Transactional
     public PaginatedResponse<ExpenseResponse> listExpenses(Long groupId, int page, int size, String sort, Instant fromDate, Instant toDate) {
-        Sort sortBy = parseSort(sort);
+        Sort sortBy = SortUtils.parseSort(sort, "createdAt,desc");
         PageRequest pageRequest = PageRequest.of(page, size, sortBy);
 
         Page<Expense> expensesPage;
@@ -340,13 +341,7 @@ public class ExpenseService {
     }
 
     private Sort parseSort(String sort) {
-        String[] parts = sort.split(",");
-        String property = parts[0];
-        Sort.Direction direction = Sort.Direction.ASC;
-        if (parts.length > 1 && parts[1].equalsIgnoreCase("desc")) {
-            direction = Sort.Direction.DESC;
-        }
-        return Sort.by(direction, property);
+        return SortUtils.parseSort(sort, "createdAt,desc");
     }
 
     private ExpenseResponse toExpenseResponse(Expense expense, Map<Long, BigDecimal> shares) {

@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface GroupRepository extends JpaRepository<Group, Long> {
     Page<Group> findAll(Pageable pageable);
+
+    Page<Group> findByNameContainingIgnoreCase(String name, Pageable pageable);
 }
