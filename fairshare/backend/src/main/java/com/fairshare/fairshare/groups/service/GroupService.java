@@ -56,11 +56,9 @@ public class GroupService {
         Group group = groupRepo.findById(groupId)
                 .orElseThrow(() -> new IllegalArgumentException("Group not found"));
 
-        List<MemberResponse> members = memberRepo.findByGroupId(groupId).stream()
-                .map(gm -> new MemberResponse(gm.getUser().getId(), gm.getUser().getName()))
-                .toList();
+        List<MemberResponse> members = listMembersForGroup(groupId);
 
-        return new GroupResponse(group.getId(), group.getName(), members);
+        return new GroupResponse(group.getId(), group.getName(), members, members.size());
     }
 
     @Transactional
@@ -80,7 +78,7 @@ public class GroupService {
                 .map(m -> new MemberResponse(m.getUser().getId(), m.getUser().getName()))
                 .toList();
 
-        return new GroupResponse(saved.getId(), saved.getName(), members);
+        return new GroupResponse(saved.getId(), saved.getName(), members, members.size());
     }
 
     public PaginatedResponse<GroupResponse> listGroups(int page, int size, String sort) {
@@ -91,11 +89,15 @@ public class GroupService {
         Page<Group> groupPage = groupRepo.findAll(pageRequest);
 
         List<GroupResponse> groupResponses = groupPage.getContent().stream()
-                .map(g -> new GroupResponse(
-                        g.getId(),
-                        g.getName(),
-                        listMembersForGroup(g.getId())
-                ))
+                .map(g -> {
+                    List<MemberResponse> members = listMembersForGroup(g.getId());
+                    return new GroupResponse(
+                            g.getId(),
+                            g.getName(),
+                            members,
+                            members.size()
+                    );
+                })
                 .toList();
 
         return new PaginatedResponse<>(
