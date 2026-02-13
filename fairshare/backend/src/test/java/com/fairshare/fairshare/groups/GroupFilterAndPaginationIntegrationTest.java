@@ -43,8 +43,11 @@ public class GroupFilterAndPaginationIntegrationTest {
         Long gid = created.get("id").asLong();
         assertThat(created.get("name").asText()).isEqualTo(uniqueName);
 
-        // First ensure name filter with page=0 returns the item
-        String listResp0 = mvc.perform(get("/groups?page=0&pageSize=10&name=" + java.net.URLEncoder.encode(uniqueName, "UTF-8")))
+        // First ensure name filter with page=0 returns the item (use param to avoid + encoding issues)
+        String listResp0 = mvc.perform(get("/groups")
+                        .param("page", "0")
+                        .param("pageSize", "10")
+                        .param("name", uniqueName))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
@@ -60,7 +63,10 @@ public class GroupFilterAndPaginationIntegrationTest {
         assertThat(found0).isTrue();
 
         // Now request page=1 while there is only 1 matching item; service should return last page's items
-        String listResp1 = mvc.perform(get("/groups?page=1&pageSize=10&name=" + java.net.URLEncoder.encode(uniqueName, "UTF-8")))
+        String listResp1 = mvc.perform(get("/groups")
+                        .param("page", "1")
+                        .param("pageSize", "10")
+                        .param("name", uniqueName))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
@@ -130,4 +136,3 @@ public class GroupFilterAndPaginationIntegrationTest {
         assertThat(group.get("members").size()).isEqualTo(2);
     }
 }
-
