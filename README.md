@@ -1,4 +1,4 @@
-# Backend — Getting Started
+# Fairshare-Backend
 
 This document provides concise, up-to-date instructions for building, running, and testing the backend service in this
 repository.
