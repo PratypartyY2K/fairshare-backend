@@ -76,7 +76,10 @@ Groups
 
 - Create group: `POST /groups` — create a group by name.
 - List groups: `GET /groups` — paginated listing. Supports `page` (0-based), `pageSize`, `sort` (`property,asc|desc`),
-  and `name` (case-insensitive substring filter). Response includes `memberCount` and `members`.
+  and `name` (case-insensitive substring filter). **Response includes full member details** (`members` array with id and
+  name for each member) plus a computed `memberCount` field. This design choice trades response size for convenience,
+  allowing clients to display member information without additional requests. For groups with many members, clients may
+  prefer to use `GET /groups/{groupId}` for individual group details.
 - Get group: `GET /groups/{groupId}` — full group details including `members` and `memberCount`.
 - Update group name: `PATCH /groups/{groupId}` — rename a group.
 - Add member: `POST /groups/{groupId}/members` — adds a member (users are created implicitly by name when added).
@@ -145,11 +148,45 @@ Data model notes & validations
 - Idempotency for expense creation: the repository stores an `idempotencyKey` on the expense and the create path will
   return an existing expense when the same key is provided.
 
+## Money Representation Contract
+
+The API uses a consistent representation for all monetary values to ensure correctness and prevent client-side bugs:
+
+**Format**: All money amounts are represented as **decimal strings** in JSON (not numbers).
+
+**Rules**:
+- The API accepts and returns monetary values as quoted strings in JSON (e.g., `"30.75"`, `"100.00"`).
+- All values are normalized to exactly 2 decimal places (scale=2), matching standard currency representation.
+- Rounding uses `RoundingMode.HALF_UP` (round to nearest neighbor; if equidistant, round up).
+- When splitting expenses, leftover cents from rounding are distributed deterministically by ascending user ID to ensure
+  the sum of splits exactly equals the total amount.
+
+**Why strings?** Using strings prevents precision loss from JSON number parsing and ensures consistent decimal
+arithmetic across all clients.
+
+**Examples**:
+- Valid: `"30.75"`, `"100.00"`, `"0.01"`
+- Invalid: `30.75` (unquoted number), `"30.7"` (missing trailing zero - will be normalized to `"30.70"` by the server)
+
+**Endpoints affected**: All money fields in requests and responses use this format, including:
+- `amount` in expense create/update requests
+- `shareAmount` in expense splits
+- `netBalance` in ledger entries
+- `amount` in settlement transfers and confirmed transfers
+- `exactAmounts` and `percentages` in split specifications
+
 Utilities and developer aids
 
 - Swagger/OpenAPI UI: `http://localhost:8080/swagger`
-- `GET /api/confirmation-id` (via `GET /groups/{groupId}/api/confirmation-id`) — convenience endpoint to generate a UUID
-  confirmation id for use when confirming settlements.
+- `GET /groups/{groupId}/api/confirmation-id` — generates a fresh UUID confirmation ID for use when confirming
+  settlements. This is a convenience endpoint to help clients generate idempotency keys. Returns:
+  ```json
+  {
+    "confirmationId": "d290f1ee-6c54-4b01-90e6-d701748f0851"
+  }
+  ```
+  Note: This endpoint is scoped to a specific group for consistency with other group-related endpoints, though the
+  generated UUID is not group-specific and can be used for any confirmation operation.
 
 ## Tests
 
