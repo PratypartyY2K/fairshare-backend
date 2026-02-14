@@ -15,25 +15,24 @@ This project implements a backend REST service with the following capabilities:
 - Pagination, sorting (including computed `memberCount`), and filtering on list endpoints
 - Idempotent expense creation via `Idempotency-Key` and idempotent settlement confirmations via `confirmationId`
 
-For the complete, up-to-date feature list and API docs, see `backend/README.md` and the Swagger UI at
+For the complete, up-to-date feature list and API docs, see `BACKEND-GUIDE.md` and the Swagger UI at
 `http://localhost:8080/swagger`.
 
 Repository structure
 
-- `backend/` — Java Spring Boot application (main service). See `backend/README.md` for detailed instructions, examples
+- Java Spring Boot application (main service). See `BACKEND-GUIDE.md` for detailed instructions, examples
   and API notes.
-- `frontend/` — optional frontend app (if present)
 - `docs/` — additional documentation
 
-Quick start (backend)
+Quick start
 
 1. Build
 
-   mvn -f backend/pom.xml clean package
+   mvn clean package
 
 2. Run
 
-   mvn -f backend/pom.xml spring-boot:run
+   mvn spring-boot:run
 
 3. API docs (Swagger UI)
 
@@ -59,4 +58,4 @@ Notes and recent behavior
 - Name filtering (when supported) performs a case-insensitive substring match: `?name=club` will match group names
   containing "club" in any casing.
 
-For backend-specific instructions, configuration details, endpoints and tests, see `backend/README.md`.
+For backend-specific instructions, configuration details, endpoints and tests, see `BACKEND-GUIDE.md`.
