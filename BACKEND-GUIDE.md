@@ -12,26 +12,26 @@ recording confirmed transfers.
 
 ## Prerequisites
 
-- Java 21 (project property `<java.version>` in `backend/pom.xml`)
+- Java 21 (project property `<java.version>` in `pom.xml`)
 - Maven (use `mvn` from the command line)
 - PostgreSQL for production (the default datasource URL in `application.yml` points to
   `jdbc:postgresql://localhost:5432/fairshare`). Tests use H2 in-memory DB.
 
 ## Build
 
-From repository root (or `backend/`):
+From repository root:
 
-mvn -f backend/pom.xml clean package
+mvn clean package
 
 or to run in development mode:
 
-mvn -f backend/pom.xml spring-boot:run
+mvn spring-boot:run
 
 The application main class is `com.fairshare.fairshare.FairshareApplication`.
 
 ## Configuration
 
-Default configuration is in `backend/src/main/resources/application.yml`.
+Default configuration is in `src/main/resources/application.yml`.
 Key defaults:
 
 - server.port: 8080
@@ -155,11 +155,11 @@ Utilities and developer aids
 
 Run unit/integration tests with:
 
-mvn -f backend/pom.xml test
+mvn test
 
 Tests run against an in-memory H2 database. A set of integration tests exercise pagination, sorting, and name-filter
 behavior
-for the Groups API (see `backend/src/test/java/com/fairshare/fairshare/groups`).
+for the Groups API (see `src/test/java/com/fairshare/fairshare/groups`).
 
 If you see failures related to paging and name filtering (e.g., expected last-page behavior), ensure that the test
 database
