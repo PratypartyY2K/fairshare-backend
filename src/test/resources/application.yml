@@ -1,0 +1,3 @@
+fairshare:
+  auth:
+    required: false

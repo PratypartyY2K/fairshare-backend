@@ -17,11 +17,19 @@ public class Group {
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
+    @Column(nullable = true, updatable = false)
+    private Long createdByUserId;
+
     protected Group() {
     }
 
     public Group(String name) {
+        this(name, null);
+    }
+
+    public Group(String name, Long createdByUserId) {
         this.name = name;
+        this.createdByUserId = createdByUserId;
     }
 
     public Long getId() {
@@ -39,5 +47,9 @@ public class Group {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Long getCreatedByUserId() {
+        return createdByUserId;
     }
 }

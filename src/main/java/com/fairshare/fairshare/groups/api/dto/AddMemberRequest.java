@@ -1,9 +1,20 @@
 package com.fairshare.fairshare.groups.api.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.AssertTrue;
 
 public record AddMemberRequest(
-        @NotBlank @Size(max = 50) String name
+        @Size(max = 50) String name,
+        @Positive Long userId
 ) {
+    public AddMemberRequest(String name) {
+        this(name, null);
+    }
+
+    @AssertTrue(message = "Either name or userId must be provided")
+    public boolean hasNameOrUserId() {
+        return (name != null && !name.trim().isBlank()) || userId != null;
+    }
 }

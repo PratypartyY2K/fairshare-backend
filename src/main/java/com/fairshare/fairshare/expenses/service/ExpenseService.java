@@ -1,5 +1,6 @@
 package com.fairshare.fairshare.expenses.service;
 
+import com.fairshare.fairshare.auth.ForbiddenException;
 import com.fairshare.fairshare.common.BadRequestException;
 import com.fairshare.fairshare.common.NotFoundException;
 import com.fairshare.fairshare.common.SortUtils;
@@ -74,22 +75,24 @@ public class ExpenseService {
     @Transactional
     public ExpenseResponse createExpense(
             Long groupId,
+            Long actorUserId,
             String description,
             BigDecimal amount,
             Long payerUserId,
             List<Long> participantUserIds
     ) {
         CreateExpenseRequest req = new CreateExpenseRequest(description, amount, payerUserId, participantUserIds);
-        return createExpense(groupId, req);
+        return createExpense(groupId, actorUserId, req);
     }
 
     @Transactional
-    public ExpenseResponse createExpense(Long groupId, CreateExpenseRequest req) {
-        return createExpense(groupId, req, null);
+    public ExpenseResponse createExpense(Long groupId, Long actorUserId, CreateExpenseRequest req) {
+        return createExpense(groupId, actorUserId, req, null);
     }
 
     @Transactional
-    public ExpenseResponse createExpense(Long groupId, CreateExpenseRequest req, String idempotencyKey) {
+    public ExpenseResponse createExpense(Long groupId, Long actorUserId, CreateExpenseRequest req, String idempotencyKey) {
+        requireActorMember(groupId, actorUserId);
         // If idempotency key provided, return existing expense if one was already created for this group+key
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             var existing = expenseRepo.findByGroupIdAndIdempotencyKey(groupId, idempotencyKey);
@@ -303,7 +306,8 @@ public class ExpenseService {
     }
 
     @Transactional
-    public LedgerResponse getLedger(Long groupId) {
+    public LedgerResponse getLedger(Long groupId, Long actorUserId) {
+        requireActorMember(groupId, actorUserId);
         var entries = ledgerRepo.findByGroupIdOrderByUserIdAsc(groupId).stream()
                 .map(e -> new LedgerResponse.Entry(e.getUserId(), e.getNetBalance()))
                 .toList();
@@ -311,7 +315,8 @@ public class ExpenseService {
     }
 
     @Transactional
-    public PaginatedResponse<ExpenseResponse> listExpenses(Long groupId, int page, int size, String sort, Instant fromDate, Instant toDate) {
+    public PaginatedResponse<ExpenseResponse> listExpenses(Long groupId, Long actorUserId, int page, int size, String sort, Instant fromDate, Instant toDate) {
+        requireActorMember(groupId, actorUserId);
         Sort sortBy = SortUtils.parseSort(sort, "createdAt,desc");
         PageRequest pageRequest = PageRequest.of(page, size, sortBy);
 
@@ -361,7 +366,8 @@ public class ExpenseService {
     }
 
     @Transactional
-    public ConfirmSettlementsResponse confirmSettlements(Long groupId, ConfirmSettlementsRequest req, String confirmationIdHeader) {
+    public ConfirmSettlementsResponse confirmSettlements(Long groupId, Long actorUserId, ConfirmSettlementsRequest req, String confirmationIdHeader) {
+        requireActorMember(groupId, actorUserId);
         if (req == null || req.getTransfers() == null || req.getTransfers().isEmpty()) {
             return new ConfirmSettlementsResponse(null, 0);
         }
@@ -413,13 +419,14 @@ public class ExpenseService {
     }
 
     @Transactional
-    public BigDecimal amountOwed(Long groupId, Long fromUserId, Long toUserId) {
+    public BigDecimal amountOwed(Long groupId, Long actorUserId, Long fromUserId, Long toUserId) {
+        requireActorMember(groupId, actorUserId);
         // Validate members
         requireMember(groupId, fromUserId);
         requireMember(groupId, toUserId);
 
         // Compute settlements
-        SettlementResponse s = getSettlements(groupId);
+        SettlementResponse s = getSettlements(groupId, actorUserId);
         BigDecimal total = BigDecimal.ZERO;
         for (var t : s.transfers()) {
             if (t.fromUserId().equals(fromUserId) && t.toUserId().equals(toUserId)) {
@@ -430,7 +437,8 @@ public class ExpenseService {
     }
 
     @Transactional
-    public BigDecimal amountOwedHistorical(Long groupId, Long fromUserId, Long toUserId) {
+    public BigDecimal amountOwedHistorical(Long groupId, Long actorUserId, Long fromUserId, Long toUserId) {
+        requireActorMember(groupId, actorUserId);
         // Validate members
         requireMember(groupId, fromUserId);
         requireMember(groupId, toUserId);
@@ -448,6 +456,13 @@ public class ExpenseService {
     private void requireMember(Long groupId, Long userId) {
         if (!groupMemberRepo.existsByGroupIdAndUserId(groupId, userId)) {
             throw new BadRequestException("User " + userId + " is not a member of group " + groupId);
+        }
+    }
+
+    private void requireActorMember(Long groupId, Long actorUserId) {
+        if (actorUserId == null) return;
+        if (!groupMemberRepo.existsByGroupIdAndUserId(groupId, actorUserId)) {
+            throw new ForbiddenException("User " + actorUserId + " is not a member of group " + groupId);
         }
     }
 
@@ -477,7 +492,8 @@ public class ExpenseService {
     }
 
     @Transactional
-    public SettlementResponse getSettlements(Long groupId) {
+    public SettlementResponse getSettlements(Long groupId, Long actorUserId) {
+        requireActorMember(groupId, actorUserId);
         var entries = ledgerRepo.findByGroupIdOrderByUserIdAsc(groupId);
 
         Map<Long, java.math.BigDecimal> net = new java.util.LinkedHashMap<>();
@@ -493,7 +509,8 @@ public class ExpenseService {
     }
 
     @Transactional
-    public ExpenseResponse updateExpense(Long groupId, Long expenseId, CreateExpenseRequest req) {
+    public ExpenseResponse updateExpense(Long groupId, Long actorUserId, Long expenseId, CreateExpenseRequest req) {
+        requireActorMember(groupId, actorUserId);
         Expense ex = expenseRepo.findById(expenseId).orElseThrow(() -> new NotFoundException("Expense not found"));
         // Acquire a pessimistic lock on the expense row to serialize concurrent updates and avoid unique constraint races
         em.lock(ex, LockModeType.PESSIMISTIC_WRITE);
@@ -658,7 +675,8 @@ public class ExpenseService {
     }
 
     @Transactional
-    public void voidExpense(Long groupId, Long expenseId) {
+    public void voidExpense(Long groupId, Long actorUserId, Long expenseId) {
+        requireActorMember(groupId, actorUserId);
         Expense ex = expenseRepo.findById(expenseId).orElseThrow(() -> new NotFoundException("Expense not found"));
         if (!ex.getGroupId().equals(groupId)) throw new BadRequestException("Expense does not belong to group");
         if (ex.isVoided()) return; // idempotent
@@ -690,7 +708,8 @@ public class ExpenseService {
     }
 
     @Transactional
-    public PaginatedResponse<EventResponse> listEvents(Long groupId, int page, int size, String sort, Instant fromDate, Instant toDate) {
+    public PaginatedResponse<EventResponse> listEvents(Long groupId, Long actorUserId, int page, int size, String sort, Instant fromDate, Instant toDate) {
+        requireActorMember(groupId, actorUserId);
         Sort sortBy = parseSort(sort);
         PageRequest pageRequest = PageRequest.of(page, size, sortBy);
 
@@ -715,7 +734,8 @@ public class ExpenseService {
     }
 
     @Transactional
-    public PaginatedResponse<ConfirmedTransferResponse> listConfirmedTransfers(Long groupId, String confirmationId, int page, int size, String sort, Instant fromDate, Instant toDate) {
+    public PaginatedResponse<ConfirmedTransferResponse> listConfirmedTransfers(Long groupId, Long actorUserId, String confirmationId, int page, int size, String sort, Instant fromDate, Instant toDate) {
+        requireActorMember(groupId, actorUserId);
         Sort sortBy = parseSort(sort);
         PageRequest pageRequest = PageRequest.of(page, size, sortBy);
 
@@ -742,7 +762,8 @@ public class ExpenseService {
     }
 
     @Transactional
-    public LedgerExplanationResponse getLedgerExplanation(Long groupId) {
+    public LedgerExplanationResponse getLedgerExplanation(Long groupId, Long actorUserId) {
+        requireActorMember(groupId, actorUserId);
         List<GroupMember> members = groupMemberRepo.findByGroupId(groupId);
         List<LedgerExplanationResponse.UserLedgerExplanation> explanations = new ArrayList<>();
 

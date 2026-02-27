@@ -57,6 +57,11 @@ Groups (base path: /groups)
 - PATCH /groups/{groupId} — update group name
 - POST /groups/{groupId}/members — add a member
 
+Users
+
+- POST /users — create a user identity (returns user id for `X-User-Id`)
+- GET /users/{userId} — get user details
+
 Expenses (group-scoped: /groups/{groupId})
 
 - POST /groups/{groupId}/expenses — create an expense (supports equal, shares, exact amounts, percentages)
@@ -136,6 +141,15 @@ Pagination, Sorting & Filtering
 
 Data model notes & validations
 
+- Authentication/authorization:
+    - The service supports `X-User-Id` request-header authentication.
+    - Enforcement is controlled by `fairshare.auth.required` (default: `false` in `application.yml`).
+    - When enabled, all group-scoped endpoints require a valid authenticated actor.
+    - Authorization policy:
+        - Group owner can add members and rename the group.
+        - Group members can read group data and access expense/ledger/settlement endpoints.
+        - Non-members receive `403 Forbidden` for group-scoped access.
+    - Group creation with authenticated actor auto-adds the creator as `OWNER`.
 - Users are created implicitly when a member is added by name. Multiple users with the same display name are allowed (
   users are identified internally by numeric id).
 - Expense inputs are validated: participants must be unique and members of the group; exactly one split mode may be

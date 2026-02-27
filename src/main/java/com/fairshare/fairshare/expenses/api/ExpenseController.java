@@ -1,7 +1,11 @@
 package com.fairshare.fairshare.expenses.api;
 
+import com.fairshare.fairshare.auth.AuthContext;
 import com.fairshare.fairshare.common.api.PaginatedResponse;
 import com.fairshare.fairshare.expenses.service.ExpenseService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -13,12 +17,16 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/groups/{groupId}")
+@Tag(name = "Expenses")
+@SecurityRequirement(name = "user-id-header")
 public class ExpenseController {
 
     private final ExpenseService service;
+    private final AuthContext authContext;
 
-    public ExpenseController(ExpenseService service) {
+    public ExpenseController(ExpenseService service, AuthContext authContext) {
         this.service = service;
+        this.authContext = authContext;
     }
 
     @PostMapping("/expenses")
@@ -63,8 +71,8 @@ public class ExpenseController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Created", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ExpenseResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
-    public ExpenseResponse createExpense(@PathVariable Long groupId, @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey, @Valid @RequestBody CreateExpenseRequest req) {
-        return service.createExpense(groupId, req, idempotencyKey);
+    public ExpenseResponse createExpense(@PathVariable Long groupId, @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey, @Valid @RequestBody CreateExpenseRequest req, HttpServletRequest request) {
+        return service.createExpense(groupId, authContext.getActorUserId(request), req, idempotencyKey);
     }
 
     @GetMapping("/ledger")
@@ -73,8 +81,8 @@ public class ExpenseController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = LedgerResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Group not found", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
-    public LedgerResponse ledger(@PathVariable Long groupId) {
-        return service.getLedger(groupId);
+    public LedgerResponse ledger(@PathVariable Long groupId, HttpServletRequest request) {
+        return service.getLedger(groupId, authContext.getActorUserId(request));
     }
 
     @GetMapping("/expenses")
@@ -86,16 +94,17 @@ public class ExpenseController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant fromDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant toDate
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant toDate,
+            HttpServletRequest request
     ) {
-        return service.listExpenses(groupId, page, size, sort, fromDate, toDate);
+        return service.listExpenses(groupId, authContext.getActorUserId(request), page, size, sort, fromDate, toDate);
     }
 
     @GetMapping("/settlements")
     @io.swagger.v3.oas.annotations.Operation(summary = "Get settlement transfers for a group", description = "Returns suggested transfers to settle debts in the group")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = SettlementResponse.class)))
-    public SettlementResponse settlements(@PathVariable Long groupId) {
-        return service.getSettlements(groupId);
+    public SettlementResponse settlements(@PathVariable Long groupId, HttpServletRequest request) {
+        return service.getSettlements(groupId, authContext.getActorUserId(request));
     }
 
     @PostMapping("/settlements/confirm")
@@ -109,8 +118,8 @@ public class ExpenseController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ConfirmSettlementsResponse.class))), // Changed response type
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
-    public ConfirmSettlementsResponse confirmSettlements(@PathVariable Long groupId, @RequestHeader(value = "Confirmation-Id", required = false) String confirmationIdHeader, @Valid @RequestBody ConfirmSettlementsRequest req) {
-        return service.confirmSettlements(groupId, req, confirmationIdHeader);
+    public ConfirmSettlementsResponse confirmSettlements(@PathVariable Long groupId, @RequestHeader(value = "Confirmation-Id", required = false) String confirmationIdHeader, @Valid @RequestBody ConfirmSettlementsRequest req, HttpServletRequest request) {
+        return service.confirmSettlements(groupId, authContext.getActorUserId(request), req, confirmationIdHeader);
     }
 
     @GetMapping("/api/confirmation-id") // Changed to a global path
@@ -123,8 +132,8 @@ public class ExpenseController {
     @GetMapping("/explanations/ledger")
     @io.swagger.v3.oas.annotations.Operation(summary = "Get ledger explanations for a group", description = "Returns a detailed explanation of each user's ledger, including contributing expenses and transfers.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = LedgerExplanationResponse.class)))
-    public LedgerExplanationResponse getLedgerExplanation(@PathVariable Long groupId) {
-        return service.getLedgerExplanation(groupId);
+    public LedgerExplanationResponse getLedgerExplanation(@PathVariable Long groupId, HttpServletRequest request) {
+        return service.getLedgerExplanation(groupId, authContext.getActorUserId(request));
     }
 
     @GetMapping("/owes")
@@ -135,8 +144,8 @@ public class ExpenseController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = OwesResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
-    public OwesResponse owes(@PathVariable Long groupId, @RequestParam Long fromUserId, @RequestParam Long toUserId) {
-        return new OwesResponse(service.amountOwedHistorical(groupId, fromUserId, toUserId));
+    public OwesResponse owes(@PathVariable Long groupId, @RequestParam Long fromUserId, @RequestParam Long toUserId, HttpServletRequest request) {
+        return new OwesResponse(service.amountOwedHistorical(groupId, authContext.getActorUserId(request), fromUserId, toUserId));
     }
 
     @GetMapping("/owes/historical")
@@ -147,8 +156,8 @@ public class ExpenseController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = OwesResponse.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
-    public OwesResponse owesHistorical(@PathVariable Long groupId, @RequestParam Long fromUserId, @RequestParam Long toUserId) {
-        return new OwesResponse(service.amountOwedHistorical(groupId, fromUserId, toUserId));
+    public OwesResponse owesHistorical(@PathVariable Long groupId, @RequestParam Long fromUserId, @RequestParam Long toUserId, HttpServletRequest request) {
+        return new OwesResponse(service.amountOwedHistorical(groupId, authContext.getActorUserId(request), fromUserId, toUserId));
     }
 
     @PatchMapping("/expenses/{expenseId}")
@@ -158,8 +167,8 @@ public class ExpenseController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not Found", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
-    public ExpenseResponse updateExpense(@PathVariable Long groupId, @PathVariable Long expenseId, @Valid @RequestBody CreateExpenseRequest req) {
-        return service.updateExpense(groupId, expenseId, req);
+    public ExpenseResponse updateExpense(@PathVariable Long groupId, @PathVariable Long expenseId, @Valid @RequestBody CreateExpenseRequest req, HttpServletRequest request) {
+        return service.updateExpense(groupId, authContext.getActorUserId(request), expenseId, req);
     }
 
     @DeleteMapping("/expenses/{expenseId}")
@@ -170,8 +179,8 @@ public class ExpenseController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Not Found", content = @io.swagger.v3.oas.annotations.media.Content(mediaType = "application/json", schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
     })
-    public void voidExpense(@PathVariable Long groupId, @PathVariable Long expenseId) {
-        service.voidExpense(groupId, expenseId);
+    public void voidExpense(@PathVariable Long groupId, @PathVariable Long expenseId, HttpServletRequest request) {
+        service.voidExpense(groupId, authContext.getActorUserId(request), expenseId);
     }
 
     @GetMapping("/events")
@@ -182,9 +191,10 @@ public class ExpenseController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant fromDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant toDate
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant toDate,
+            HttpServletRequest request
     ) {
-        return service.listEvents(groupId, page, size, sort, fromDate, toDate);
+        return service.listEvents(groupId, authContext.getActorUserId(request), page, size, sort, fromDate, toDate);
     }
 
     @GetMapping("/confirmed-transfers")
@@ -196,9 +206,10 @@ public class ExpenseController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt,desc") String sort,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant fromDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant toDate
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant toDate,
+            HttpServletRequest request
     ) {
-        return service.listConfirmedTransfers(groupId, confirmationId, page, size, sort, fromDate, toDate);
+        return service.listConfirmedTransfers(groupId, authContext.getActorUserId(request), confirmationId, page, size, sort, fromDate, toDate);
     }
 
 }
