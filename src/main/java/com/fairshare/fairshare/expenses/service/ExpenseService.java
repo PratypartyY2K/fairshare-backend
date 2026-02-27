@@ -72,11 +72,6 @@ public class ExpenseService {
     }
 
     @Transactional
-    public ExpenseResponse createExpense(Long groupId, Long actorUserId, CreateExpenseRequest req) {
-        return createExpense(groupId, actorUserId, req, null);
-    }
-
-    @Transactional
     public ExpenseResponse createExpense(Long groupId, Long actorUserId, CreateExpenseRequest req, String idempotencyKey) {
         requireActorMember(groupId, actorUserId);
         // If idempotency key provided, return existing expense if one was already created for this group+key

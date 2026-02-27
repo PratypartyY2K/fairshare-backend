@@ -6,6 +6,8 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "groups")
+//noinspection LombokGetterMayBeUsed,LombokSetterMayBeUsed
+@SuppressWarnings("unused")
 public class Group {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -14,10 +16,11 @@ public class Group {
     @Column(nullable = false)
     private String name;
 
+    //noinspection FieldMayBeFinal
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
-    @Column(nullable = true, updatable = false)
+    @Column(updatable = false)
     private Long createdByUserId;
 
     protected Group() {

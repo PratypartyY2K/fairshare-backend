@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 
 public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> {
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     boolean existsByGroupIdAndUserId(Long groupId, Long userId);
     boolean existsByGroupIdAndUserIdAndRole(Long groupId, Long userId, GroupMember.Role role);
     List<GroupMember> findByUserId(Long userId);
