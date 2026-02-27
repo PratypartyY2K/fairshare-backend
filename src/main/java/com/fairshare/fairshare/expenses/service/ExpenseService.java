@@ -71,20 +71,6 @@ public class ExpenseService {
         return norm;
     }
 
-    // Backwards-compatible legacy method delegates to the new request-based API
-    @Transactional
-    public ExpenseResponse createExpense(
-            Long groupId,
-            Long actorUserId,
-            String description,
-            BigDecimal amount,
-            Long payerUserId,
-            List<Long> participantUserIds
-    ) {
-        CreateExpenseRequest req = new CreateExpenseRequest(description, amount, payerUserId, participantUserIds);
-        return createExpense(groupId, actorUserId, req);
-    }
-
     @Transactional
     public ExpenseResponse createExpense(Long groupId, Long actorUserId, CreateExpenseRequest req) {
         return createExpense(groupId, actorUserId, req, null);
@@ -134,12 +120,10 @@ public class ExpenseService {
         LinkedHashSet<Long> participants = new LinkedHashSet<>(participantUserIds);
         participants.add(payer);
 
-        if (participants.isEmpty()) throw new BadRequestException("At least one participant is required");
-
         List<Long> ids = new ArrayList<>(participants);
 
         // Determine shares mapping based on requested split mode
-        Map<Long, BigDecimal> sharesMap = null;
+        Map<Long, BigDecimal> sharesMap;
 
         // Enforce that exactly one split mode is provided
         int splitModes = 0;
@@ -199,7 +183,8 @@ public class ExpenseService {
 
             Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
             for (int i = 0; i < participantUserIds.size(); i++) {
-                BigDecimal share = totalAmount.multiply(pct.get(i)).divide(new BigDecimal("100"));
+                BigDecimal share = totalAmount.multiply(pct.get(i))
+                        .divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP);
                 tmp.put(participantUserIds.get(i), share.setScale(2, RoundingMode.DOWN)); // floor to 2 decimals
             }
 
@@ -254,7 +239,7 @@ public class ExpenseService {
         }
 
         // persist creation event
-        String createdPayload = String.format("{\"expenseId\":%d,\"amount\":\"%s\"}", expense.getId(), expense.getAmount().toString());
+        String createdPayload = String.format("{\"expenseId\":%d,\"amount\":\"%s\"}", expense.getId(), expense.getAmount());
         eventRepo.save(new ExpenseEvent(groupId, expense.getId(), "ExpenseCreated", createdPayload));
 
         return toExpenseResponse(expense, sharesMap);
@@ -419,24 +404,6 @@ public class ExpenseService {
     }
 
     @Transactional
-    public BigDecimal amountOwed(Long groupId, Long actorUserId, Long fromUserId, Long toUserId) {
-        requireActorMember(groupId, actorUserId);
-        // Validate members
-        requireMember(groupId, fromUserId);
-        requireMember(groupId, toUserId);
-
-        // Compute settlements
-        SettlementResponse s = getSettlements(groupId, actorUserId);
-        BigDecimal total = BigDecimal.ZERO;
-        for (var t : s.transfers()) {
-            if (t.fromUserId().equals(fromUserId) && t.toUserId().equals(toUserId)) {
-                total = total.add(t.amount());
-            }
-        }
-        return total.setScale(2, RoundingMode.HALF_UP);
-    }
-
-    @Transactional
     public BigDecimal amountOwedHistorical(Long groupId, Long actorUserId, Long fromUserId, Long toUserId) {
         requireActorMember(groupId, actorUserId);
         // Validate members
@@ -449,8 +416,7 @@ public class ExpenseService {
         // payments: sum of confirmed transfers from fromUserId to toUserId
         BigDecimal payments = confirmedTransferRepo.sumConfirmedAmount(groupId, fromUserId, toUserId);
 
-        BigDecimal outstanding = obligations.subtract(payments).setScale(2, RoundingMode.HALF_UP);
-        return outstanding;
+        return obligations.subtract(payments).setScale(2, RoundingMode.HALF_UP);
     }
 
     private void requireMember(Long groupId, Long userId) {
@@ -540,7 +506,7 @@ public class ExpenseService {
         List<Long> ids = new ArrayList<>(participants);
 
         // compute new sharesMap using same precedence logic as createExpense
-        Map<Long, BigDecimal> newShares = null;
+        Map<Long, BigDecimal> newShares;
         BigDecimal totalAmount = normalizeCurrency(req.amount());
 
         // Enforce that exactly one split mode is provided
@@ -581,7 +547,12 @@ public class ExpenseService {
                 throw new BadRequestException("Percentages must sum to 100% within 0.01 tolerance");
             Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
             for (int i = 0; i < participantUserIds.size(); i++)
-                tmp.put(participantUserIds.get(i), totalAmount.multiply(pct.get(i)).divide(new BigDecimal("100")).setScale(2, RoundingMode.DOWN));
+                tmp.put(
+                        participantUserIds.get(i),
+                        totalAmount.multiply(pct.get(i))
+                                .divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP)
+                                .setScale(2, RoundingMode.DOWN)
+                );
             if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
             newShares = distributeLeftover(tmp, totalAmount);
         } else if (req.getShares() != null && !req.getShares().isEmpty()) {
@@ -606,12 +577,6 @@ public class ExpenseService {
         LedgerEntry payerEntry = ledger(groupId, payer);
         payerEntry.add(payerDelta);
         ledgerRepo.save(payerEntry);
-
-        // update participant records and per-user ledger deltas
-        // build oldShares default zeros
-        Map<Long, BigDecimal> oldSharesDefault = new LinkedHashMap<>(oldShares);
-        for (Long id : newShares.keySet())
-            oldSharesDefault.putIfAbsent(id, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
 
         // Update participants safely: update existing, insert new, delete removed
         // Fetch existing participant entities keyed by userId
@@ -668,7 +633,7 @@ public class ExpenseService {
         expenseRepo.save(ex);
 
         // persist event
-        String payload = String.format("{\"before\":{\"amount\":\"%s\"},\"after\":{\"amount\":\"%s\"}}", oldTotal.toString(), totalAmount.toString());
+        String payload = String.format("{\"before\":{\"amount\":\"%s\"},\"after\":{\"amount\":\"%s\"}}", oldTotal, totalAmount);
         eventRepo.save(new ExpenseEvent(groupId, expenseId, "ExpenseUpdated", payload));
 
         return toExpenseResponse(ex, newShares);
@@ -703,7 +668,7 @@ public class ExpenseService {
         expenseRepo.save(ex);
 
         // persist event
-        String payload = String.format("{\"expenseId\":%d,\"amount\":\"%s\"}", expenseId, total.toString());
+        String payload = String.format("{\"expenseId\":%d,\"amount\":\"%s\"}", expenseId, total);
         eventRepo.save(new ExpenseEvent(groupId, expenseId, "ExpenseVoided", payload));
     }
 

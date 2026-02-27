@@ -50,7 +50,7 @@ class AuthPolicyIntegrationTest {
                         .content("{\"name\":\"Policy Group\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        Long groupId = mapper.readTree(created).get("id").asLong();
+        long groupId = mapper.readTree(created).get("id").asLong();
 
         mvc.perform(get("/groups/" + groupId)
                         .header(AuthContext.USER_ID_HEADER, String.valueOf(outsiderId)))

@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.Collections;
 
 @ControllerAdvice
+@SuppressWarnings("unused")
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(BadRequestException.class)

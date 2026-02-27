@@ -12,7 +12,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -64,7 +63,7 @@ public class ExpenseController {
                     )
             ),
             parameters = {
-                    @io.swagger.v3.oas.annotations.Parameter(name = "Idempotency-Key", in = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER, description = "Idempotency key to make create expense requests safe to retry", required = false)
+                    @io.swagger.v3.oas.annotations.Parameter(name = "Idempotency-Key", in = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER, description = "Idempotency key to make create expense requests safe to retry")
             }
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
@@ -113,7 +112,7 @@ public class ExpenseController {
     @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ConfirmSettlementsRequest.class), examples = {
             @io.swagger.v3.oas.annotations.media.ExampleObject(name = "ConfirmWithId", summary = "Confirm with confirmationId for idempotency", value = "{\"confirmationId\":\"confirm-abc-123\",\"transfers\":[{\"fromUserId\":1,\"toUserId\":2,\"amount\":\"10.00\"}]}")
     }))
-    @io.swagger.v3.oas.annotations.Parameter(name = "Confirmation-Id", in = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER, description = "Optional confirmation id (UUID) to make confirmations idempotent; if provided it overrides the body confirmationId when body lacks one", required = false)
+    @io.swagger.v3.oas.annotations.Parameter(name = "Confirmation-Id", in = io.swagger.v3.oas.annotations.enums.ParameterIn.HEADER, description = "Optional confirmation id (UUID) to make confirmations idempotent; if provided it overrides the body confirmationId when body lacks one")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "OK", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = ConfirmSettlementsResponse.class))), // Changed response type
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Bad Request", content = @io.swagger.v3.oas.annotations.media.Content(schema = @io.swagger.v3.oas.annotations.media.Schema(implementation = com.fairshare.fairshare.common.api.ApiError.class)))
