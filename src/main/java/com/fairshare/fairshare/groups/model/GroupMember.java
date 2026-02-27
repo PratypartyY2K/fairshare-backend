@@ -8,7 +8,6 @@ import jakarta.persistence.*;
         name = "group_members",
         uniqueConstraints = @UniqueConstraint(columnNames = {"group_id", "user_id"})
 )
-//noinspection LombokGetterMayBeUsed
 public class GroupMember {
     public enum Role {
         OWNER,
@@ -31,11 +30,8 @@ public class GroupMember {
     @Column(nullable = false, length = 16)
     private Role role = Role.MEMBER;
 
+    @SuppressWarnings("unused")
     protected GroupMember() {}
-
-    public GroupMember(Group group, User user) {
-        this(group, user, Role.MEMBER);
-    }
 
     public GroupMember(Group group, User user, Role role) {
         this.group = group;
@@ -46,5 +42,4 @@ public class GroupMember {
     public Long getId() { return id; }
     public Group getGroup() { return group; }
     public User getUser() { return user; }
-    public Role getRole() { return role; }
 }

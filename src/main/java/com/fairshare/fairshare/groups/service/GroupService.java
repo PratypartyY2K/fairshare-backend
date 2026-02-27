@@ -146,6 +146,7 @@ public class GroupService {
         );
     }
 
+    @SuppressWarnings("SqlNoDataSourceInspection")
     private PaginatedResponse<GroupResponse> listGroupsByMemberCount(Long actorUserId, int page, int size, String sortDirection, String name) {
         StringBuilder where = new StringBuilder(" WHERE 1=1 ");
         if (name != null && !name.isBlank()) {
@@ -155,7 +156,6 @@ public class GroupService {
             where.append(" AND EXISTS (SELECT 1 FROM group_members me WHERE me.group_id = g.id AND me.user_id = :actorUserId) ");
         }
 
-        //noinspection SqlNoDataSourceInspection
         String countSql = "SELECT COUNT(*) FROM groups g " + where;
         var countQuery = em.createNativeQuery(countSql);
         if (name != null && !name.isBlank()) {
@@ -172,7 +172,6 @@ public class GroupService {
         int offset = page * size;
 
         String dirSql = "asc".equalsIgnoreCase(sortDirection) ? "ASC" : "DESC";
-        //noinspection SqlNoDataSourceInspection
         String sql = "SELECT g.id, g.name FROM groups g " + where +
                 " ORDER BY (SELECT COUNT(1) FROM group_members gm WHERE gm.group_id = g.id) " + dirSql +
                 " LIMIT :limit OFFSET :offset";
