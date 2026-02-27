@@ -11,6 +11,8 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
   jackson:
     time-zone: America/New_York
   devtools:
