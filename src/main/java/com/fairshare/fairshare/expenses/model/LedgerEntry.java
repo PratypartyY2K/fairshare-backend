@@ -26,6 +26,7 @@ public class LedgerEntry {
     @Column(name = "net_balance", nullable = false, precision = 12, scale = 2)
     private BigDecimal netBalance = BigDecimal.ZERO;
 
+    @SuppressWarnings("unused")
     protected LedgerEntry() {
     }
 

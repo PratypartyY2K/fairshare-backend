@@ -10,10 +10,12 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ExpenseRepository extends JpaRepository<Expense, Long> {
+    @SuppressWarnings("unused")
     List<Expense> findByGroupIdOrderByCreatedAtDesc(Long groupId);
 
     Optional<Expense> findByGroupIdAndIdempotencyKey(Long groupId, String idempotencyKey);
 
+    @SuppressWarnings("unused")
     List<Expense> findByGroupIdAndVoidedFalseOrderByCreatedAtDesc(Long groupId);
 
     List<Expense> findByGroupIdAndPayerUserId(Long groupId, Long payerUserId);

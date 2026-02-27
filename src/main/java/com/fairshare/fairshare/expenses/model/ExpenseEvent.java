@@ -28,6 +28,7 @@ public class ExpenseEvent {
     @Column(nullable = false, updatable = false)
     private final Instant createdAt = Instant.now();
 
+    @SuppressWarnings("unused")
     protected ExpenseEvent() {
     }
 

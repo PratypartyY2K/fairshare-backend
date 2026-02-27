@@ -18,6 +18,7 @@ public class ConfirmSettlementsRequest {
     @NotNull
     private List<Transfer> transfers;
 
+    @SuppressWarnings("unused")
     public ConfirmSettlementsRequest() {
     }
 
@@ -38,6 +39,7 @@ public class ConfirmSettlementsRequest {
         @Schema(type = "string", example = "10.00")
         private BigDecimal amount;
 
+        @SuppressWarnings("unused")
         public Transfer() {
         }
 

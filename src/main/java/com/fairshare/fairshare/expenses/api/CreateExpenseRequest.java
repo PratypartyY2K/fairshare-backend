@@ -65,6 +65,7 @@ public class CreateExpenseRequest {
     private List<@NotNull BigDecimal> percentages;
 
     // Default constructor for Jackson
+    @SuppressWarnings("unused")
     public CreateExpenseRequest() {
     }
 
@@ -77,6 +78,7 @@ public class CreateExpenseRequest {
     }
 
     // Full constructor
+    @SuppressWarnings("unused")
     public CreateExpenseRequest(String description, BigDecimal amount, Long payerUserId, List<Long> participantUserIds, List<Integer> shares, List<BigDecimal> exactAmounts, List<BigDecimal> percentages) {
         this.description = description;
         this.amount = amount;
