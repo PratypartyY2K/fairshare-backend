@@ -1,4 +1,4 @@
-package com.fairshare.fairshare.groups;
+package com.fairshare.fairshare.groups.model;
 
 import jakarta.persistence.*;
 
