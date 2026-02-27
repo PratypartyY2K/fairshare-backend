@@ -1,9 +1,11 @@
 package com.fairshare.fairshare.expenses.model;
 
 import jakarta.persistence.*;
+import lombok.Getter;
 
 import java.time.Instant;
 
+@Getter
 @Entity
 @Table(name = "expense_events")
 public class ExpenseEvent {
@@ -24,7 +26,7 @@ public class ExpenseEvent {
     private String payload;
 
     @Column(nullable = false, updatable = false)
-    private Instant createdAt = Instant.now();
+    private final Instant createdAt = Instant.now();
 
     protected ExpenseEvent() {
     }
@@ -36,27 +38,4 @@ public class ExpenseEvent {
         this.payload = payload;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public Long getGroupId() {
-        return groupId;
-    }
-
-    public Long getExpenseId() {
-        return expenseId;
-    }
-
-    public String getEventType() {
-        return eventType;
-    }
-
-    public String getPayload() {
-        return payload;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
 }

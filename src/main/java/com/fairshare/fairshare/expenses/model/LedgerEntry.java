@@ -1,9 +1,11 @@
-package com.fairshare.fairshare.expenses;
+package com.fairshare.fairshare.expenses.model;
 
 import jakarta.persistence.*;
+import lombok.Getter;
 
 import java.math.BigDecimal;
 
+@Getter
 @Entity
 @Table(
         name = "ledger_entries",
@@ -30,23 +32,6 @@ public class LedgerEntry {
     public LedgerEntry(Long groupId, Long userId) {
         this.groupId = groupId;
         this.userId = userId;
-        this.netBalance = BigDecimal.ZERO;
-    }
-
-    public Long getId() {
-        return id;
-    }
-
-    public Long getGroupId() {
-        return groupId;
-    }
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public BigDecimal getNetBalance() {
-        return netBalance;
     }
 
     public void add(BigDecimal delta) {

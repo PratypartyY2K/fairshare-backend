@@ -4,10 +4,14 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.util.List;
 
+@Setter
+@Getter
 public class ConfirmSettlementsRequest {
     private String confirmationId;
 
@@ -21,22 +25,8 @@ public class ConfirmSettlementsRequest {
         this.transfers = transfers;
     }
 
-    public String getConfirmationId() {
-        return confirmationId;
-    }
-
-    public void setConfirmationId(String confirmationId) {
-        this.confirmationId = confirmationId;
-    }
-
-    public List<Transfer> getTransfers() {
-        return transfers;
-    }
-
-    public void setTransfers(List<Transfer> transfers) {
-        this.transfers = transfers;
-    }
-
+    @Setter
+    @Getter
     public static class Transfer {
         @NotNull
         private Long fromUserId;
@@ -57,28 +47,5 @@ public class ConfirmSettlementsRequest {
             this.amount = amount;
         }
 
-        public Long getFromUserId() {
-            return fromUserId;
-        }
-
-        public void setFromUserId(Long fromUserId) {
-            this.fromUserId = fromUserId;
-        }
-
-        public Long getToUserId() {
-            return toUserId;
-        }
-
-        public void setToUserId(Long toUserId) {
-            this.toUserId = toUserId;
-        }
-
-        public BigDecimal getAmount() {
-            return amount;
-        }
-
-        public void setAmount(BigDecimal amount) {
-            this.amount = amount;
-        }
     }
 }

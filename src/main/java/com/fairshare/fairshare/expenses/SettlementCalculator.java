@@ -25,8 +25,7 @@ public final class SettlementCalculator {
 
         // Stable ordering: biggest amounts first helps reduce transactions
         // Tie-break by userId ascending to ensure deterministic ordering when values are equal
-        Comparator<Map.Entry<Long, BigDecimal>> byValueThenIdAsc = Comparator
-                .<Map.Entry<Long, BigDecimal>, BigDecimal>comparing(Map.Entry::getValue)
+        Comparator<Map.Entry<Long, BigDecimal>> byValueThenIdAsc = Map.Entry.<Long, BigDecimal>comparingByValue()
                 .thenComparing(Map.Entry::getKey);
 
         debtors.sort(byValueThenIdAsc);                 // ascending (more negative first)

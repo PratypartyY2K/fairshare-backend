@@ -6,20 +6,25 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.*;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
+@Setter
 @Schema(
         name = "CreateExpenseRequest",
-        description = "Request to create an expense. Exactly one split mode (shares, exactAmounts, or percentages) must be provided. If none are provided, the expense is split equally among participants.\n" +
-                "- exactAmounts: list of exact money amounts per participant (must sum to total ± $0.01).\n" +
-                "- percentages: list of percentages per participant (must sum to 100% ± 0.01).\n" +
-                "- shares: list of integer weights (relative shares).\n" +
-                "If participants are omitted, all group members are used. Leftover cents are distributed deterministically by ascending userId to guarantee sums equal the total."
+        description = """
+                Request to create an expense. Exactly one split mode (shares, exactAmounts, or percentages) must be provided. If none are provided, the expense is split equally among participants.
+                - exactAmounts: list of exact money amounts per participant (must sum to total ± $0.01).
+                - percentages: list of percentages per participant (must sum to 100% ± 0.01).
+                - shares: list of integer weights (relative shares).
+                If participants are omitted, all group members are used. Leftover cents are distributed deterministically by ascending userId to guarantee sums equal the total."""
 )
 public class CreateExpenseRequest {
+    // setters for Jackson
     @NotBlank
     @Schema(description = "Short description of the expense", example = "Groceries")
     private String description;
@@ -40,17 +45,21 @@ public class CreateExpenseRequest {
     @ArraySchema(schema = @Schema(description = "List of participant user ids (order matters for exact amounts/percentages/shares)", example = "[10,11,12]"))
     private List<Long> participantUserIds;
 
+    // getters for new fields
     // split modes (optional) - only one should be provided
     // shares: relative integer weights, e.g., [2,1,1]
+    @Getter
     @ArraySchema(schema = @Schema(description = "Relative integer weights for participants (corresponds to participantUserIds order). e.g., [2,1,1]", minimum = "1", example = "[2,1,1]"))
     private List<@Positive Integer> shares;
 
     // exact amounts list, corresponding to participants order
+    @Getter
     @ArraySchema(schema = @Schema(description = "Exact monetary amounts for participants (must sum to total ± $0.01). Order corresponds to participantUserIds. e.g., [7.25,2.75]", type = "string", example = "[\"7.25\",\"2.75\"]"))
     @JsonFormat(shape = JsonFormat.Shape.STRING)
     private List<@NotNull BigDecimal> exactAmounts;
 
     // percentages list (0-100), corresponding to participants order
+    @Getter
     @ArraySchema(schema = @Schema(description = "Percentages for participants (must sum to 100% ± 0.01). Order corresponds to participantUserIds. e.g., [50,25,25]", type = "string", example = "[\"50.00\",\"25.00\",\"25.00\"]"))
     @JsonFormat(shape = JsonFormat.Shape.STRING)
     private List<@NotNull BigDecimal> percentages;
@@ -95,53 +104,10 @@ public class CreateExpenseRequest {
         return participantUserIds;
     }
 
-    // getters for new fields
-    public List<Integer> getShares() {
-        return shares;
-    }
-
-    public void setShares(List<Integer> shares) {
-        this.shares = shares;
-    }
-
-    public List<BigDecimal> getExactAmounts() {
-        return exactAmounts;
-    }
-
-    public void setExactAmounts(List<BigDecimal> exactAmounts) {
-        this.exactAmounts = exactAmounts;
-    }
-
-    public List<BigDecimal> getPercentages() {
-        return percentages;
-    }
-
-    public void setPercentages(List<BigDecimal> percentages) {
-        this.percentages = percentages;
-    }
-
-    // setters for Jackson
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
-    }
-
-    public void setPayerUserId(Long payerUserId) {
-        this.payerUserId = payerUserId;
-    }
-
-    public void setParticipantUserIds(List<Long> participantUserIds) {
-        this.participantUserIds = participantUserIds;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof CreateExpenseRequest)) return false;
-        CreateExpenseRequest that = (CreateExpenseRequest) o;
+        if (!(o instanceof CreateExpenseRequest that)) return false;
         return Objects.equals(description, that.description) && Objects.equals(amount, that.amount) && Objects.equals(payerUserId, that.payerUserId) && Objects.equals(participantUserIds, that.participantUserIds) && Objects.equals(shares, that.shares) && Objects.equals(exactAmounts, that.exactAmounts) && Objects.equals(percentages, that.percentages);
     }
 

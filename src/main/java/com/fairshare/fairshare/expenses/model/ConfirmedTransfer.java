@@ -1,10 +1,12 @@
 package com.fairshare.fairshare.expenses.model;
 
 import jakarta.persistence.*;
+import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 
+@Getter
 @Entity
 @Table(name = "confirmed_transfers")
 public class ConfirmedTransfer {
@@ -28,17 +30,7 @@ public class ConfirmedTransfer {
     private String confirmationId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt = Instant.now();
-
-    protected ConfirmedTransfer() {
-    }
-
-    public ConfirmedTransfer(Long groupId, Long fromUserId, Long toUserId, BigDecimal amount) {
-        this.groupId = groupId;
-        this.fromUserId = fromUserId;
-        this.toUserId = toUserId;
-        this.amount = amount;
-    }
+    private final Instant createdAt = Instant.now();
 
     public ConfirmedTransfer(Long groupId, Long fromUserId, Long toUserId, BigDecimal amount, String confirmationId) {
         this.groupId = groupId;
@@ -48,31 +40,4 @@ public class ConfirmedTransfer {
         this.confirmationId = confirmationId;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public Long getGroupId() {
-        return groupId;
-    }
-
-    public Long getFromUserId() {
-        return fromUserId;
-    }
-
-    public Long getToUserId() {
-        return toUserId;
-    }
-
-    public BigDecimal getAmount() {
-        return amount;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
-
-    public String getConfirmationId() {
-        return confirmationId;
-    }
 }

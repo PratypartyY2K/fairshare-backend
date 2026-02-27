@@ -22,7 +22,7 @@ class SettlementCalculatorTest {
         List<SettlementCalculator.Transfer> tx = SettlementCalculator.compute(net);
 
         assertEquals(2, tx.size());
-        assertEquals(2L, tx.get(0).fromUserId());
+        assertEquals(2L, tx.getFirst().fromUserId());
         assertEquals(1L, tx.get(0).toUserId());
         assertEquals(new BigDecimal("10.00"), tx.get(0).amount());
 
@@ -40,6 +40,6 @@ class SettlementCalculatorTest {
 
         var tx = SettlementCalculator.compute(net);
         assertEquals(1, tx.size());
-        assertEquals(new BigDecimal("0.01"), tx.get(0).amount());
+        assertEquals(new BigDecimal("0.01"), tx.getFirst().amount());
     }
 }

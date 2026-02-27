@@ -5,7 +5,7 @@ import com.fairshare.fairshare.common.BadRequestException;
 import com.fairshare.fairshare.common.NotFoundException;
 import com.fairshare.fairshare.common.SortUtils;
 import com.fairshare.fairshare.common.api.PaginatedResponse;
-import com.fairshare.fairshare.expenses.Expense;
+import com.fairshare.fairshare.expenses.model.Expense;
 import com.fairshare.fairshare.expenses.ExpenseRepository;
 import com.fairshare.fairshare.expenses.LedgerEntry;
 import com.fairshare.fairshare.expenses.LedgerEntryRepository;
@@ -300,7 +300,7 @@ public class ExpenseService {
         Sort sortBy = SortUtils.parseSort(sort, "createdAt,desc");
         PageRequest pageRequest = PageRequest.of(page, size, sortBy);
 
-        Page<Expense> expensesPage;
+        Page<com.fairshare.fairshare.expenses.model.Expense> expensesPage;
         if (fromDate != null && toDate != null) {
             expensesPage = expenseRepo.findByGroupIdAndVoidedFalseAndCreatedAtBetween(groupId, fromDate, toDate, pageRequest);
         } else {
