@@ -7,7 +7,7 @@ import com.fairshare.fairshare.common.SortUtils;
 import com.fairshare.fairshare.common.api.PaginatedResponse;
 import com.fairshare.fairshare.expenses.model.Expense;
 import com.fairshare.fairshare.expenses.ExpenseRepository;
-import com.fairshare.fairshare.expenses.LedgerEntry;
+import com.fairshare.fairshare.expenses.model.LedgerEntry;
 import com.fairshare.fairshare.expenses.LedgerEntryRepository;
 import com.fairshare.fairshare.expenses.ExpenseParticipantRepository;
 import com.fairshare.fairshare.expenses.ConfirmedTransferRepository;
