@@ -16,11 +16,6 @@ import java.util.Collections;
 @SuppressWarnings("unused")
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(BadRequestException.class)
-    public ResponseEntity<ApiError> handleBadRequestException(BadRequestException ex, WebRequest request) {
-        return error(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
-    }
-
     @ExceptionHandler(UnauthenticatedException.class)
     public ResponseEntity<ApiError> handleUnauthenticatedException(UnauthenticatedException ex, WebRequest request) {
         return error(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
@@ -31,8 +26,8 @@ public class GlobalExceptionHandler {
         return error(HttpStatus.FORBIDDEN, ex.getMessage(), request);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiError> handleIllegalArgumentException(IllegalArgumentException ex, WebRequest request) {
+    @ExceptionHandler({BadRequestException.class, IllegalArgumentException.class})
+    public ResponseEntity<ApiError> handleBadRequestExceptions(RuntimeException ex, WebRequest request) {
         return error(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
     }
 

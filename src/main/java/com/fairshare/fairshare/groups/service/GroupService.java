@@ -1,6 +1,7 @@
 package com.fairshare.fairshare.groups.service;
 
 import com.fairshare.fairshare.auth.ForbiddenException;
+import com.fairshare.fairshare.common.BadRequestException;
 import com.fairshare.fairshare.common.NotFoundException;
 import com.fairshare.fairshare.common.SortUtils;
 import com.fairshare.fairshare.common.api.PaginatedResponse;
@@ -60,7 +61,7 @@ public class GroupService {
         } else {
             String trimmed = name == null ? "" : name.trim();
             if (trimmed.isBlank()) {
-                throw new IllegalArgumentException("Member name must not be blank");
+                throw new BadRequestException("Member name must not be blank");
             }
             user = userRepo.save(new User(trimmed));
         }
@@ -87,7 +88,7 @@ public class GroupService {
 
         String trimmed = newName == null ? "" : newName.trim();
         if (trimmed.isBlank()) {
-            throw new IllegalArgumentException("Group name must not be blank");
+            throw new BadRequestException("Group name must not be blank");
         }
 
         group.setName(trimmed);
