@@ -3,14 +3,19 @@ package com.fairshare.fairshare.expenses;
 import com.fairshare.fairshare.expenses.model.ExpenseParticipant;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 
 @Repository
 public interface ExpenseParticipantRepository extends JpaRepository<ExpenseParticipant, Long> {
     List<ExpenseParticipant> findByExpense_Id(Long expenseId);
+
+    @Query("SELECT ep FROM ExpenseParticipant ep WHERE ep.expense.id IN :expenseIds ORDER BY ep.expense.id ASC, ep.userId ASC")
+    List<ExpenseParticipant> findByExpenseIdInOrderByExpenseIdAscUserIdAsc(@Param("expenseIds") Collection<Long> expenseIds);
 
     void deleteByExpense_Id(Long expenseId);
 

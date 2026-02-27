@@ -16,12 +16,16 @@ import com.fairshare.fairshare.users.model.User;
 import com.fairshare.fairshare.users.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 public class GroupService {
@@ -118,33 +122,28 @@ public class GroupService {
         }
 
         Sort sortOrder = SortUtils.parseSort(sort, "id,desc");
-        List<Group> all = (name != null && !name.isBlank())
-                ? groupRepo.findByNameContainingIgnoreCase(name.trim())
-                : groupRepo.findAll();
+        PageRequest pageRequest = PageRequest.of(Math.max(page, 0), size, sortOrder);
 
+        Page<Group> groupsPage;
+        String trimmedName = name == null ? null : name.trim();
         if (actorUserId != null) {
-            Set<Long> allowedGroupIds = memberRepo.findByUserId(actorUserId).stream()
-                    .map(gm -> gm.getGroup().getId())
-                    .collect(Collectors.toSet());
-            all = all.stream().filter(g -> allowedGroupIds.contains(g.getId())).toList();
+            groupsPage = (trimmedName == null || trimmedName.isBlank())
+                    ? groupRepo.findPageVisibleToUser(actorUserId, pageRequest)
+                    : groupRepo.findPageVisibleToUserByName(actorUserId, trimmedName, pageRequest);
+        } else {
+            groupsPage = (trimmedName == null || trimmedName.isBlank())
+                    ? groupRepo.findAll(pageRequest)
+                    : groupRepo.findByNameContainingIgnoreCase(trimmedName, pageRequest);
         }
 
-        List<Group> sorted = sortGroups(all, sortOrder);
-        int totalItems = sorted.size();
-        int totalPages = size <= 0 ? 0 : (int) Math.ceil((double) totalItems / (double) size);
-
-        if (totalPages > 0 && page >= totalPages) page = totalPages - 1;
-        if (page < 0) page = 0;
-
-        int from = Math.max(0, page * size);
-        int to = Math.min(from + size, totalItems);
-        List<Group> pageContent = from <= to ? sorted.subList(from, to) : List.of();
-
-        List<GroupResponse> groupResponses = pageContent.stream()
-                .map(g -> toGroupResponse(g.getId(), g.getName(), actorUserId))
-                .toList();
-
-        return new PaginatedResponse<>(groupResponses, totalItems, totalPages, page, size);
+        List<GroupResponse> groupResponses = toGroupResponses(groupsPage.getContent(), actorUserId);
+        return new PaginatedResponse<>(
+                groupResponses,
+                groupsPage.getTotalElements(),
+                groupsPage.getTotalPages(),
+                groupsPage.getNumber(),
+                groupsPage.getSize()
+        );
     }
 
     private PaginatedResponse<GroupResponse> listGroupsByMemberCount(Long actorUserId, int page, int size, String sortDirection, String name) {
@@ -191,27 +190,20 @@ public class GroupService {
         @SuppressWarnings("unchecked")
         List<Object[]> rows = query.getResultList();
 
-        List<GroupResponse> results = rows.stream().map(r -> {
-            Long groupId = ((Number) r[0]).longValue();
-            String groupName = (String) r[1];
-            return toGroupResponse(groupId, groupName, actorUserId);
-        }).toList();
+        List<GroupSummary> summaries = rows.stream()
+                .map(r -> new GroupSummary(((Number) r[0]).longValue(), (String) r[1]))
+                .toList();
+        Map<Long, List<MemberResponse>> membersByGroupId = listMembersForGroups(
+                summaries.stream().map(GroupSummary::id).collect(java.util.stream.Collectors.toSet())
+        );
+        List<GroupResponse> results = summaries.stream()
+                .map(summary -> {
+                    List<MemberResponse> members = membersByGroupId.getOrDefault(summary.id(), List.of());
+                    return new GroupResponse(summary.id(), summary.name(), members, members.size(), actorUserId);
+                })
+                .toList();
 
         return new PaginatedResponse<>(results, totalItems, totalPages, page, size);
-    }
-
-    private List<Group> sortGroups(List<Group> groups, Sort sortOrder) {
-        return groups.stream().sorted((a, b) -> {
-            if (sortOrder.isSorted()) {
-                Sort.Order order = sortOrder.iterator().next();
-                String property = order.getProperty();
-                int cmp;
-                if ("name".equalsIgnoreCase(property)) cmp = a.getName().compareToIgnoreCase(b.getName());
-                else cmp = a.getId().compareTo(b.getId());
-                return order.isAscending() ? cmp : -cmp;
-            }
-            return b.getId().compareTo(a.getId());
-        }).toList();
     }
 
     private Group requireGroup(Long groupId) {
@@ -238,8 +230,32 @@ public class GroupService {
                 .toList();
     }
 
+    private Map<Long, List<MemberResponse>> listMembersForGroups(Collection<Long> groupIds) {
+        if (groupIds == null || groupIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<MemberResponse>> out = new LinkedHashMap<>();
+        for (GroupMember gm : memberRepo.findByGroupIdInOrderByGroupIdAscUserIdAsc(groupIds)) {
+            Long groupId = gm.getGroup().getId();
+            out.computeIfAbsent(groupId, ignored -> new java.util.ArrayList<>())
+                    .add(new MemberResponse(gm.getUser().getId(), gm.getUser().getName()));
+        }
+        return out;
+    }
+
+    private List<GroupResponse> toGroupResponses(List<Group> groups, Long actorUserId) {
+        Set<Long> groupIds = groups.stream().map(Group::getId).collect(java.util.stream.Collectors.toSet());
+        Map<Long, List<MemberResponse>> membersByGroupId = listMembersForGroups(groupIds);
+        return groups.stream().map(g -> {
+            List<MemberResponse> members = membersByGroupId.getOrDefault(g.getId(), List.of());
+            return new GroupResponse(g.getId(), g.getName(), members, members.size(), actorUserId);
+        }).toList();
+    }
+
     private GroupResponse toGroupResponse(Long groupId, String groupName, Long actorUserId) {
         List<MemberResponse> members = listMembersForGroup(groupId);
         return new GroupResponse(groupId, groupName, members, members.size(), actorUserId);
     }
+
+    private record GroupSummary(Long id, String name) {}
 }

@@ -307,14 +307,20 @@ public class ExpenseService {
             expensesPage = expenseRepo.findByGroupIdAndVoidedFalse(groupId, pageRequest);
         }
 
-        List<ExpenseResponse> expenseResponses = new ArrayList<>();
-        for (Expense ex : expensesPage.getContent()) {
-            Map<Long, BigDecimal> shares = new LinkedHashMap<>();
-            for (ExpenseParticipant p : participantRepo.findByExpense_Id(ex.getId())) {
-                shares.put(p.getUserId(), p.getShareAmount());
+        List<Expense> pageExpenses = expensesPage.getContent();
+        List<Long> expenseIds = pageExpenses.stream().map(Expense::getId).toList();
+        Map<Long, Map<Long, BigDecimal>> sharesByExpenseId = new LinkedHashMap<>();
+        if (!expenseIds.isEmpty()) {
+            for (ExpenseParticipant p : participantRepo.findByExpenseIdInOrderByExpenseIdAscUserIdAsc(expenseIds)) {
+                Long expenseId = p.getExpense().getId();
+                sharesByExpenseId.computeIfAbsent(expenseId, ignored -> new LinkedHashMap<>())
+                        .put(p.getUserId(), p.getShareAmount());
             }
-            expenseResponses.add(toExpenseResponse(ex, shares));
         }
+
+        List<ExpenseResponse> expenseResponses = pageExpenses.stream()
+                .map(ex -> toExpenseResponse(ex, sharesByExpenseId.getOrDefault(ex.getId(), Map.of())))
+                .toList();
 
         return new PaginatedResponse<>(
                 expenseResponses,
