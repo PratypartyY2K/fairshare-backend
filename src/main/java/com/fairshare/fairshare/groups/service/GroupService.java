@@ -135,6 +135,19 @@ public class GroupService {
                     ? groupRepo.findAll(pageRequest)
                     : groupRepo.findByNameContainingIgnoreCase(trimmedName, pageRequest);
         }
+        if (groupsPage.getTotalPages() > 0 && page >= groupsPage.getTotalPages()) {
+            int clampedPage = groupsPage.getTotalPages() - 1;
+            PageRequest clampedRequest = PageRequest.of(clampedPage, size, sortOrder);
+            if (actorUserId != null) {
+                groupsPage = (trimmedName == null || trimmedName.isBlank())
+                        ? groupRepo.findPageVisibleToUser(actorUserId, clampedRequest)
+                        : groupRepo.findPageVisibleToUserByName(actorUserId, trimmedName, clampedRequest);
+            } else {
+                groupsPage = (trimmedName == null || trimmedName.isBlank())
+                        ? groupRepo.findAll(clampedRequest)
+                        : groupRepo.findByNameContainingIgnoreCase(trimmedName, clampedRequest);
+            }
+        }
 
         List<GroupResponse> groupResponses = toGroupResponses(groupsPage.getContent(), actorUserId);
         return new PaginatedResponse<>(
