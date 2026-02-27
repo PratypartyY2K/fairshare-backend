@@ -9,6 +9,7 @@ import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -20,6 +21,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -44,6 +46,8 @@ class ExpenseServiceScalabilityTest {
     private ExpenseEventRepository eventRepo;
     @Mock
     private EntityManager em;
+    @Captor
+    private ArgumentCaptor<List<Long>> idsCaptor;
 
     @Test
     void listExpenses_usesBatchParticipantLookupPerPage() {
@@ -73,7 +77,7 @@ class ExpenseServiceScalabilityTest {
         ExpenseParticipant p2 = new ExpenseParticipant(ex1, 1002L, new BigDecimal("15.00"));
         ExpenseParticipant p3 = new ExpenseParticipant(ex2, 1001L, new BigDecimal("10.00"));
         ExpenseParticipant p4 = new ExpenseParticipant(ex2, 1002L, new BigDecimal("10.00"));
-        when(participantRepo.findByExpenseIdInOrderByExpenseIdAscUserIdAsc(any(List.class)))
+        when(participantRepo.findByExpenseIdInOrderByExpenseIdAscUserIdAsc(anyList()))
                 .thenReturn(List.of(p1, p2, p3, p4));
 
         PaginatedResponse<ExpenseResponse> response = service.listExpenses(groupId, actorId, 0, 2, "createdAt,desc", null, null);
@@ -82,10 +86,9 @@ class ExpenseServiceScalabilityTest {
         assertThat(response.items().get(0).splits()).hasSize(2);
         assertThat(response.items().get(1).splits()).hasSize(2);
 
-        verify(participantRepo, times(1)).findByExpenseIdInOrderByExpenseIdAscUserIdAsc(any(List.class));
+        verify(participantRepo, times(1)).findByExpenseIdInOrderByExpenseIdAscUserIdAsc(anyList());
         verify(participantRepo, never()).findByExpense_Id(anyLong());
 
-        ArgumentCaptor<List<Long>> idsCaptor = ArgumentCaptor.forClass(List.class);
         verify(participantRepo).findByExpenseIdInOrderByExpenseIdAscUserIdAsc(idsCaptor.capture());
         assertThat(idsCaptor.getValue()).containsExactly(1L, 2L);
     }

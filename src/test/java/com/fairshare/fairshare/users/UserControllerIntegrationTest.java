@@ -38,7 +38,7 @@ class UserControllerIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         JsonNode createdNode = mapper.readTree(created);
-        Long userId = createdNode.get("id").asLong();
+        long userId = createdNode.get("id").asLong();
         assertThat(createdNode.get("email").asText()).isEqualTo(email.toLowerCase());
 
         String fetched = mvc.perform(get("/users/" + userId))

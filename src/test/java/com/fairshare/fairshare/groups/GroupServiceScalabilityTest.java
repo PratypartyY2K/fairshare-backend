@@ -13,6 +13,7 @@ import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -24,6 +25,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -40,6 +42,8 @@ class GroupServiceScalabilityTest {
     private GroupMemberRepository memberRepo;
     @Mock
     private EntityManager em;
+    @Captor
+    private ArgumentCaptor<Set<Long>> idsCaptor;
 
     @Test
     void listGroups_usesDbPagingAndBatchMemberLookup() {
@@ -61,7 +65,7 @@ class GroupServiceScalabilityTest {
         GroupMember gm1 = new GroupMember(g1, u1, GroupMember.Role.OWNER);
         GroupMember gm2 = new GroupMember(g1, u2, GroupMember.Role.MEMBER);
         GroupMember gm3 = new GroupMember(g2, u2, GroupMember.Role.MEMBER);
-        when(memberRepo.findByGroupIdInOrderByGroupIdAscUserIdAsc(any(Set.class)))
+        when(memberRepo.findByGroupIdInOrderByGroupIdAscUserIdAsc(anySet()))
                 .thenReturn(List.of(gm1, gm2, gm3));
 
         PaginatedResponse<GroupResponse> response = service.listGroups(null, 0, 2, "name,asc", null);
@@ -72,10 +76,9 @@ class GroupServiceScalabilityTest {
         assertThat(response.items().get(1).memberCount()).isEqualTo(1);
 
         verify(groupRepo, times(1)).findAll(any(PageRequest.class));
-        verify(memberRepo, times(1)).findByGroupIdInOrderByGroupIdAscUserIdAsc(any(Set.class));
+        verify(memberRepo, times(1)).findByGroupIdInOrderByGroupIdAscUserIdAsc(anySet());
         verify(memberRepo, never()).findByGroupId(any(Long.class));
 
-        ArgumentCaptor<Set<Long>> idsCaptor = ArgumentCaptor.forClass(Set.class);
         verify(memberRepo).findByGroupIdInOrderByGroupIdAscUserIdAsc(idsCaptor.capture());
         assertThat(idsCaptor.getValue()).containsExactlyInAnyOrder(11L, 22L);
     }

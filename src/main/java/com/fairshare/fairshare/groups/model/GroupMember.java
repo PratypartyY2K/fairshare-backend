@@ -2,12 +2,14 @@ package com.fairshare.fairshare.groups.model;
 
 import com.fairshare.fairshare.users.model.User;
 import jakarta.persistence.*;
+import lombok.Getter;
 
 @Entity
 @Table(
         name = "group_members",
         uniqueConstraints = @UniqueConstraint(columnNames = {"group_id", "user_id"})
 )
+@Getter
 public class GroupMember {
     public enum Role {
         OWNER,
@@ -39,7 +41,4 @@ public class GroupMember {
         this.role = role == null ? Role.MEMBER : role;
     }
 
-    public Long getId() { return id; }
-    public Group getGroup() { return group; }
-    public User getUser() { return user; }
 }
