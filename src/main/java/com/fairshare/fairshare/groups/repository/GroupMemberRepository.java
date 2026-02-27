@@ -12,7 +12,6 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, Long> 
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     boolean existsByGroupIdAndUserId(Long groupId, Long userId);
     boolean existsByGroupIdAndUserIdAndRole(Long groupId, Long userId, GroupMember.Role role);
-    List<GroupMember> findByUserId(Long userId);
     List<GroupMember> findByGroupId(Long groupId);
 
     @Query("SELECT gm FROM GroupMember gm WHERE gm.group.id IN :groupIds ORDER BY gm.group.id ASC, gm.user.id ASC")

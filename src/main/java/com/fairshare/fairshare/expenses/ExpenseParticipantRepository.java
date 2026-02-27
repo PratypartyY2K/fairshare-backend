@@ -17,8 +17,6 @@ public interface ExpenseParticipantRepository extends JpaRepository<ExpenseParti
     @Query("SELECT ep FROM ExpenseParticipant ep WHERE ep.expense.id IN :expenseIds ORDER BY ep.expense.id ASC, ep.userId ASC")
     List<ExpenseParticipant> findByExpenseIdInOrderByExpenseIdAscUserIdAsc(@Param("expenseIds") Collection<Long> expenseIds);
 
-    void deleteByExpense_Id(Long expenseId);
-
     @Query("SELECT COALESCE(SUM(ep.shareAmount), 0) FROM ExpenseParticipant ep JOIN ep.expense e WHERE e.groupId = ?1 AND e.payerUserId = ?2 AND ep.userId = ?3")
     BigDecimal sumShareByGroupAndPayerAndUser(Long groupId, Long payerUserId, Long participantUserId);
 

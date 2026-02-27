@@ -9,7 +9,6 @@ import jakarta.persistence.*;
         uniqueConstraints = @UniqueConstraint(columnNames = {"group_id", "user_id"})
 )
 //noinspection LombokGetterMayBeUsed
-@SuppressWarnings("unused")
 public class GroupMember {
     public enum Role {
         OWNER,

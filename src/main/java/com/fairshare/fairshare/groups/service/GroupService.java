@@ -171,8 +171,8 @@ public class GroupService {
         if (page < 0) page = 0;
         int offset = page * size;
 
-        //noinspection SqlNoDataSourceInspection
         String dirSql = "asc".equalsIgnoreCase(sortDirection) ? "ASC" : "DESC";
+        //noinspection SqlNoDataSourceInspection
         String sql = "SELECT g.id, g.name FROM groups g " + where +
                 " ORDER BY (SELECT COUNT(1) FROM group_members gm WHERE gm.group_id = g.id) " + dirSql +
                 " LIMIT :limit OFFSET :offset";

@@ -7,11 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.util.List;
-
 public interface GroupRepository extends JpaRepository<Group, Long> {
-    List<Group> findByNameContainingIgnoreCase(String name);
-
     Page<Group> findByNameContainingIgnoreCase(String name, Pageable pageable);
 
     @Query(value = "SELECT g FROM Group g WHERE EXISTS (SELECT 1 FROM GroupMember gm WHERE gm.group.id = g.id AND gm.user.id = :userId)",
