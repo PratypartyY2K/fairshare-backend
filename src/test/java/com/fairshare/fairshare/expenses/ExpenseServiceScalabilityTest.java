@@ -2,6 +2,7 @@ package com.fairshare.fairshare.expenses;
 
 import com.fairshare.fairshare.common.api.PaginatedResponse;
 import com.fairshare.fairshare.expenses.api.ExpenseResponse;
+import com.fairshare.fairshare.expenses.Expense;
 import com.fairshare.fairshare.expenses.model.ExpenseParticipant;
 import com.fairshare.fairshare.expenses.service.ExpenseService;
 import com.fairshare.fairshare.groups.repository.GroupMemberRepository;
