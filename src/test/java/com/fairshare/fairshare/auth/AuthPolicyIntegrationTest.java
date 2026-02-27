@@ -50,7 +50,9 @@ class AuthPolicyIntegrationTest {
                         .content("{\"name\":\"Policy Group\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        long groupId = mapper.readTree(created).get("id").asLong();
+        JsonNode createdNode = mapper.readTree(created);
+        long groupId = createdNode.get("id").asLong();
+        assertThat(createdNode.path("actorUserId").asLong()).isEqualTo(ownerId);
 
         mvc.perform(get("/groups/" + groupId)
                         .header(AuthContext.USER_ID_HEADER, String.valueOf(outsiderId)))
@@ -62,9 +64,12 @@ class AuthPolicyIntegrationTest {
                         .content("{\"userId\":" + memberId + "}"))
                 .andExpect(status().isCreated());
 
-        mvc.perform(get("/groups/" + groupId)
+        String groupAsMember = mvc.perform(get("/groups/" + groupId)
                         .header(AuthContext.USER_ID_HEADER, String.valueOf(memberId)))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode groupAsMemberNode = mapper.readTree(groupAsMember);
+        assertThat(groupAsMemberNode.path("actorUserId").asLong()).isEqualTo(memberId);
 
         mvc.perform(patch("/groups/" + groupId)
                         .header(AuthContext.USER_ID_HEADER, String.valueOf(memberId))
@@ -79,6 +84,15 @@ class AuthPolicyIntegrationTest {
         JsonNode items = mapper.readTree(listAsMember).get("items");
         assertThat(items.isArray()).isTrue();
         assertThat(items.size()).isGreaterThan(0);
+        boolean found = false;
+        for (JsonNode item : items) {
+            if (item.path("id").asLong() == groupId) {
+                assertThat(item.path("actorUserId").asLong()).isEqualTo(memberId);
+                found = true;
+                break;
+            }
+        }
+        assertThat(found).isTrue();
     }
 
     private Long createUser(String name) throws Exception {

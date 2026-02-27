@@ -40,8 +40,9 @@ public class GroupFilterAndPaginationIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         JsonNode created = mapper.readTree(createResp);
-        Long gid = created.get("id").asLong();
+        long gid = created.get("id").asLong();
         assertThat(created.get("name").asText()).isEqualTo(uniqueName);
+        assertThat(created.path("actorUserId").isNull()).isTrue();
 
         // First ensure name filter with page=0 returns the item (use param to avoid + encoding issues)
         String listResp0 = mvc.perform(get("/groups")
@@ -118,7 +119,7 @@ public class GroupFilterAndPaginationIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         JsonNode created = mapper.readTree(createResp);
-        Long gid = created.get("id").asLong();
+        long gid = created.get("id").asLong();
 
         // Add two members
         mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"alice\"}"))
@@ -134,5 +135,6 @@ public class GroupFilterAndPaginationIntegrationTest {
         assertThat(group.get("memberCount").asInt()).isEqualTo(2);
         assertThat(group.get("members").isArray()).isTrue();
         assertThat(group.get("members").size()).isEqualTo(2);
+        assertThat(group.path("actorUserId").isNull()).isTrue();
     }
 }

@@ -77,9 +77,7 @@ public class GroupService {
         Group group = requireGroup(groupId);
         requireMember(groupId, actorUserId);
 
-        List<MemberResponse> members = listMembersForGroup(groupId);
-
-        return new GroupResponse(group.getId(), group.getName(), members, members.size());
+        return toGroupResponse(group.getId(), group.getName(), actorUserId);
     }
 
     @Transactional
@@ -95,8 +93,7 @@ public class GroupService {
         group.setName(trimmed);
         Group saved = groupRepo.save(group);
 
-        List<MemberResponse> members = listMembersForGroup(groupId);
-        return new GroupResponse(saved.getId(), saved.getName(), members, members.size());
+        return toGroupResponse(saved.getId(), saved.getName(), actorUserId);
     }
 
     public PaginatedResponse<GroupResponse> listGroups(Long actorUserId, int page, int size, String sort, String name) {
@@ -132,10 +129,7 @@ public class GroupService {
         List<Group> pageContent = from <= to ? sorted.subList(from, to) : List.of();
 
         List<GroupResponse> groupResponses = pageContent.stream()
-                .map(g -> {
-                    List<MemberResponse> members = listMembersForGroup(g.getId());
-                    return new GroupResponse(g.getId(), g.getName(), members, members.size());
-                })
+                .map(g -> toGroupResponse(g.getId(), g.getName(), actorUserId))
                 .toList();
 
         return new PaginatedResponse<>(groupResponses, totalItems, totalPages, page, size);
@@ -188,8 +182,7 @@ public class GroupService {
         List<GroupResponse> results = rows.stream().map(r -> {
             Long groupId = ((Number) r[0]).longValue();
             String groupName = (String) r[1];
-            List<MemberResponse> members = listMembersForGroup(groupId);
-            return new GroupResponse(groupId, groupName, members, members.size());
+            return toGroupResponse(groupId, groupName, actorUserId);
         }).toList();
 
         return new PaginatedResponse<>(results, totalItems, totalPages, page, size);
@@ -231,5 +224,10 @@ public class GroupService {
         return memberRepo.findByGroupId(groupId).stream()
                 .map(gm -> new MemberResponse(gm.getUser().getId(), gm.getUser().getName()))
                 .toList();
+    }
+
+    private GroupResponse toGroupResponse(Long groupId, String groupName, Long actorUserId) {
+        List<MemberResponse> members = listMembersForGroup(groupId);
+        return new GroupResponse(groupId, groupName, members, members.size(), actorUserId);
     }
 }
