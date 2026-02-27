@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -71,7 +72,7 @@ class ExpenseServiceScalabilityTest {
         ReflectionTestUtils.setField(ex1, "id", 1L);
         ReflectionTestUtils.setField(ex2, "id", 2L);
 
-        when(expenseRepo.findByGroupIdAndVoidedFalse(eq(groupId), any(PageRequest.class)))
+        org.mockito.Mockito.when(expenseRepo.findByGroupIdAndVoidedFalse(eq(groupId), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(ex1, ex2), PageRequest.of(0, 2), 2));
 
         ExpenseParticipant p1 = new ExpenseParticipant(ex1, 1001L, new BigDecimal("15.00"));

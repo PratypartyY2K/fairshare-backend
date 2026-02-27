@@ -1,10 +1,11 @@
 package com.fairshare.fairshare.expenses.model;
 
-import com.fairshare.fairshare.expenses.Expense;
 import jakarta.persistence.*;
+import lombok.Getter;
 
 import java.math.BigDecimal;
 
+@Getter
 @Entity
 @Table(
         name = "expense_participants",
@@ -34,19 +35,4 @@ public class ExpenseParticipant {
         this.shareAmount = shareAmount;
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public Expense getExpense() {
-        return expense;
-    }
-
-    public Long getUserId() {
-        return userId;
-    }
-
-    public BigDecimal getShareAmount() {
-        return shareAmount;
-    }
 }
