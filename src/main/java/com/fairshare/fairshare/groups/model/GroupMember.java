@@ -1,6 +1,5 @@
 package com.fairshare.fairshare.groups.model;
 
-import com.fairshare.fairshare.groups.Group;
 import com.fairshare.fairshare.users.User;
 import jakarta.persistence.*;
 

@@ -2,8 +2,8 @@ package com.fairshare.fairshare.groups.api;
 
 import com.fairshare.fairshare.auth.AuthContext;
 import com.fairshare.fairshare.common.api.PaginatedResponse;
-import com.fairshare.fairshare.groups.Group;
 import com.fairshare.fairshare.groups.service.GroupService;
+import com.fairshare.fairshare.groups.model.Group;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;

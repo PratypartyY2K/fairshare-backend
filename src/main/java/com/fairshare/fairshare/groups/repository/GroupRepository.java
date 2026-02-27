@@ -1,6 +1,6 @@
 package com.fairshare.fairshare.groups.repository;
 
-import com.fairshare.fairshare.groups.Group;
+import com.fairshare.fairshare.groups.model.Group;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
