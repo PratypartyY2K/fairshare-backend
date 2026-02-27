@@ -30,7 +30,11 @@ public class ConfirmedTransfer {
     private String confirmationId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private final Instant createdAt = Instant.now();
+    private Instant createdAt;
+
+    protected ConfirmedTransfer() {
+        // Required by JPA
+    }
 
     public ConfirmedTransfer(Long groupId, Long fromUserId, Long toUserId, BigDecimal amount, String confirmationId) {
         this.groupId = groupId;
@@ -38,6 +42,7 @@ public class ConfirmedTransfer {
         this.toUserId = toUserId;
         this.amount = amount;
         this.confirmationId = confirmationId;
+        this.createdAt = Instant.now();
     }
 
 }
