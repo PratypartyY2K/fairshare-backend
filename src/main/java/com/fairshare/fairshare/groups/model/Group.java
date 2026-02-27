@@ -6,8 +6,6 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "groups")
-//noinspection LombokGetterMayBeUsed,LombokSetterMayBeUsed
-@SuppressWarnings("unused")
 public class Group {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
