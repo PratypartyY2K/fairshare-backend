@@ -1,4 +1,4 @@
-package com.fairshare.fairshare.expenses.model;
+package com.fairshare.fairshare.expenses;
 
 import jakarta.persistence.*;
 
