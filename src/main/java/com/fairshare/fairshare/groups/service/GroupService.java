@@ -12,8 +12,8 @@ import com.fairshare.fairshare.groups.model.Group;
 import com.fairshare.fairshare.groups.model.GroupMember;
 import com.fairshare.fairshare.groups.repository.GroupMemberRepository;
 import com.fairshare.fairshare.groups.repository.GroupRepository;
-import com.fairshare.fairshare.users.User;
-import com.fairshare.fairshare.users.UserRepository;
+import com.fairshare.fairshare.users.model.User;
+import com.fairshare.fairshare.users.repository.UserRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Sort;
@@ -51,7 +51,7 @@ public class GroupService {
     }
 
     @Transactional
-    public AddMemberResponse addMember(Long groupId, Long actorUserId, String name, Long userId) {
+    public AddMemberResponse addMember(Long groupId, Long actorUserId, String name, String email, Long userId) {
         Group group = requireGroup(groupId);
         requireOwner(groupId, actorUserId);
 
@@ -59,11 +59,14 @@ public class GroupService {
         if (userId != null) {
             user = userRepo.findById(userId).orElseThrow(() -> new NotFoundException("User " + userId + " not found"));
         } else {
-            String trimmed = name == null ? "" : name.trim();
-            if (trimmed.isBlank()) {
-                throw new BadRequestException("Member name must not be blank");
-            }
-            user = userRepo.save(new User(trimmed));
+            String normalizedEmail = normalizeEmail(email);
+            user = userRepo.findByEmailIgnoreCase(normalizedEmail).orElseGet(() -> {
+                String trimmedName = name == null ? "" : name.trim();
+                if (trimmedName.isBlank()) {
+                    throw new BadRequestException("Member name must not be blank when creating a new user");
+                }
+                return userRepo.save(new User(trimmedName, normalizedEmail));
+            });
         }
 
         if (!memberRepo.existsByGroupIdAndUserId(group.getId(), user.getId())) {
@@ -71,6 +74,14 @@ public class GroupService {
         }
 
         return new AddMemberResponse(user.getId(), user.getName());
+    }
+
+    private String normalizeEmail(String email) {
+        String normalized = email == null ? "" : email.trim().toLowerCase();
+        if (normalized.isBlank()) {
+            throw new BadRequestException("Member email must not be blank");
+        }
+        return normalized;
     }
 
     @Transactional

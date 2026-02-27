@@ -42,7 +42,7 @@ public class GroupControllerIntegrationTest {
         assertThat(node.path("actorUserId").isNull()).isTrue();
 
         // add member
-        String addMem = "{\"name\":\"alice\"}";
+        String addMem = String.format("{\"name\":\"alice\",\"email\":\"alice+%d@example.com\"}", id);
         String addResp = mvc.perform(post("/groups/" + id + "/members")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(addMem))
@@ -88,5 +88,38 @@ public class GroupControllerIntegrationTest {
             }
         }
         assertThat(found).isTrue();
+    }
+
+    @Test
+    @DisplayName("Adding a member with an existing email reuses the same user")
+    void addMemberReusesExistingUserByEmail() throws Exception {
+        String groupResp = mvc.perform(post("/groups")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Email Reuse Group\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Long groupId = mapper.readTree(groupResp).get("id").asLong();
+
+        String firstAdd = mvc.perform(post("/groups/" + groupId + "/members")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(String.format("{\"name\":\"alice\",\"email\":\"alice+%d@example.com\"}", groupId)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Long firstUserId = mapper.readTree(firstAdd).get("userId").asLong();
+
+        String secondAdd = mvc.perform(post("/groups/" + groupId + "/members")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(String.format("{\"name\":\"alice2\",\"email\":\"alice+%d@example.com\"}", groupId)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Long secondUserId = mapper.readTree(secondAdd).get("userId").asLong();
+        assertThat(secondUserId).isEqualTo(firstUserId);
+
+        String getResp = mvc.perform(get("/groups/" + groupId))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode members = mapper.readTree(getResp).get("members");
+        assertThat(members.isArray()).isTrue();
+        assertThat(members.size()).isEqualTo(1);
     }
 }

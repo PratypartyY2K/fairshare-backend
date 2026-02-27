@@ -40,8 +40,8 @@ public class ExpenseControllerIT {
         Long gid = groupJson.get("id").asLong();
 
         // add two members
-        var addA = new com.fairshare.fairshare.groups.api.dto.AddMemberRequest("Bob");
-        var addB = new com.fairshare.fairshare.groups.api.dto.AddMemberRequest("Carol");
+        var addA = new com.fairshare.fairshare.groups.api.dto.AddMemberRequest("Bob", "bob+" + gid + "@example.com", null);
+        var addB = new com.fairshare.fairshare.groups.api.dto.AddMemberRequest("Carol", "carol+" + gid + "@example.com", null);
 
         var r1 = mvc.perform(post(String.format("/groups/%d/members", gid))
                         .contentType(MediaType.APPLICATION_JSON)

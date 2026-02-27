@@ -1,6 +1,6 @@
 package com.fairshare.fairshare.groups.model;
 
-import com.fairshare.fairshare.users.User;
+import com.fairshare.fairshare.users.model.User;
 import jakarta.persistence.*;
 
 @Entity

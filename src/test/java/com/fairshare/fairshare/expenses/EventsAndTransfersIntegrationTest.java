@@ -36,10 +36,10 @@ public class EventsAndTransfersIntegrationTest {
         String gresp = mvc.perform(post("/groups").contentType(MediaType.APPLICATION_JSON).content(group)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long gid = mapper.readTree(gresp).get("id").asLong();
 
-        String m1 = "{\"name\":\"p\"}";
+        String m1 = String.format("{\"name\":\"p\",\"email\":\"p+%d@example.com\"}", gid);
         Long p = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
 
-        String m2 = "{\"name\":\"q\"}";
+        String m2 = String.format("{\"name\":\"q\",\"email\":\"q+%d@example.com\"}", gid);
         Long q = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
 
         // create expense

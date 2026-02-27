@@ -96,9 +96,10 @@ class AuthPolicyIntegrationTest {
     }
 
     private Long createUser(String name) throws Exception {
+        String email = name + "+" + System.nanoTime() + "@example.com";
         String response = mvc.perform(post("/users")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\":\"" + name + "\"}"))
+                        .content("{\"name\":\"" + name + "\",\"email\":\"" + email + "\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return mapper.readTree(response).get("id").asLong();

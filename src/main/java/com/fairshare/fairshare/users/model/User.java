@@ -1,4 +1,4 @@
-package com.fairshare.fairshare.users;
+package com.fairshare.fairshare.users.model;
 
 import jakarta.persistence.*;
 
@@ -12,10 +12,17 @@ public class User {
     @Column(nullable = false)
     private String name;
 
+    @Column(nullable = false, unique = true)
+    private String email;
+
     protected User() {}
 
-    public User(String name) { this.name = name; }
+    public User(String name, String email) {
+        this.name = name;
+        this.email = email;
+    }
 
     public Long getId() { return id; }
     public String getName() { return name; }
+    public String getEmail() { return email; }
 }

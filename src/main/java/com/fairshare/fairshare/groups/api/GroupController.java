@@ -41,7 +41,7 @@ public class GroupController {
     @ResponseStatus(HttpStatus.CREATED)
     public AddMemberResponse addMember(@PathVariable Long groupId, @Valid @RequestBody AddMemberRequest req, HttpServletRequest request) {
         Long actorUserId = authContext.getActorUserId(request);
-        return service.addMember(groupId, actorUserId, req.name(), req.userId());
+        return service.addMember(groupId, actorUserId, req.name(), req.email(), req.userId());
     }
 
     @GetMapping("/{groupId}")

@@ -42,15 +42,14 @@ public class ExpenseControllerIntegrationTest {
         Long gid = gnode.get("id").asLong();
 
         // add two members
-        String m1 = "{\"name\":\"alice\"}";
+        String m1 = String.format("{\"name\":\"alice\",\"email\":\"alice+%d@example.com\"}", gid);
         String r1 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         JsonNode rn1 = mapper.readTree(r1);
         Long aliceId = rn1.get("userId").asLong();
 
-        String m2 = "{\"name\":\"bob\"}";
-        String r2 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        JsonNode rn2 = mapper.readTree(r2);
-        Long bobId = rn2.get("userId").asLong();
+        String m2 = String.format("{\"name\":\"bob\",\"email\":\"bob+%d@example.com\"}", gid);
+        mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2))
+                .andExpect(status().isCreated());
 
         // create expense with payer alice and participants omitted (defaults to all members)
         String exp = String.format("{\"description\":\"Lunch\",\"amount\":\"30.00\",\"payerUserId\":%d}", aliceId);
@@ -71,7 +70,7 @@ public class ExpenseControllerIntegrationTest {
         assertThat(sn.get("transfers").isArray()).isTrue();
 
         // confirm a settlement (if any suggested)
-        if (sn.get("transfers").size() > 0) {
+        if (!sn.get("transfers").isEmpty()) {
             JsonNode first = sn.get("transfers").get(0);
             Long from = first.get("fromUserId").asLong();
             Long to = first.get("toUserId").asLong();
@@ -106,15 +105,15 @@ public class ExpenseControllerIntegrationTest {
         Long gid = gnode.get("id").asLong();
 
         // add three members
-        String m1 = "{\"name\":\"a\"}";
+        String m1 = String.format("{\"name\":\"a\",\"email\":\"a+%d@example.com\"}", gid);
         String r1 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long a = mapper.readTree(r1).get("userId").asLong();
 
-        String m2 = "{\"name\":\"b\"}";
+        String m2 = String.format("{\"name\":\"b\",\"email\":\"b+%d@example.com\"}", gid);
         String r2 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long b = mapper.readTree(r2).get("userId").asLong();
 
-        String m3 = "{\"name\":\"c\"}";
+        String m3 = String.format("{\"name\":\"c\",\"email\":\"c+%d@example.com\"}", gid);
         String r3 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m3)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long c = mapper.readTree(r3).get("userId").asLong();
 
@@ -154,13 +153,13 @@ public class ExpenseControllerIntegrationTest {
         Long gid = gnode.get("id").asLong();
 
         // add two members
-        String m1 = "{\"name\":\"alice\"}";
+        String m1 = String.format("{\"name\":\"alice\",\"email\":\"alice+%d@example.com\"}", gid);
         String r1 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long aliceId = mapper.readTree(r1).get("userId").asLong();
 
-        String m2 = "{\"name\":\"bob\"}";
-        String r2 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        Long bobId = mapper.readTree(r2).get("userId").asLong();
+        String m2 = String.format("{\"name\":\"bob\",\"email\":\"bob+%d@example.com\"}", gid);
+        mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2))
+                .andExpect(status().isCreated());
 
         String key = "test-idempotency-123";
         String expBody = String.format("{\"description\":\"Coffee\",\"amount\":\"5.00\",\"payerUserId\":%d}", aliceId);
@@ -216,7 +215,7 @@ public class ExpenseControllerIntegrationTest {
         Long gid = gnode.get("id").asLong();
 
         // add members
-        String m1 = "{\"name\":\"d\"}";
+        String m1 = String.format("{\"name\":\"d\",\"email\":\"d+%d@example.com\"}", gid);
         String r1 = mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         Long d = mapper.readTree(r1).get("userId").asLong();
 

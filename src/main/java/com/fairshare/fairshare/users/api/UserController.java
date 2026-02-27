@@ -1,8 +1,9 @@
 package com.fairshare.fairshare.users.api;
 
+import com.fairshare.fairshare.common.BadRequestException;
 import com.fairshare.fairshare.common.NotFoundException;
-import com.fairshare.fairshare.users.User;
-import com.fairshare.fairshare.users.UserRepository;
+import com.fairshare.fairshare.users.model.User;
+import com.fairshare.fairshare.users.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -34,8 +35,13 @@ public class UserController {
             @ApiResponse(responseCode = "400", description = "Bad Request")
     })
     public UserResponse create(@RequestBody @Valid CreateUserRequest request) {
-        User user = userRepository.save(new User(request.name().trim()));
-        return new UserResponse(user.getId(), user.getName());
+        String normalizedEmail = normalizeEmail(request.email());
+        if (userRepository.findByEmailIgnoreCase(normalizedEmail).isPresent()) {
+            throw new BadRequestException("User with email already exists");
+        }
+
+        User user = userRepository.save(new User(request.name().trim(), normalizedEmail));
+        return new UserResponse(user.getId(), user.getName(), user.getEmail());
     }
 
     @GetMapping("/{userId}")
@@ -47,6 +53,14 @@ public class UserController {
     public UserResponse get(@PathVariable Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User " + userId + " not found"));
-        return new UserResponse(user.getId(), user.getName());
+        return new UserResponse(user.getId(), user.getName(), user.getEmail());
+    }
+
+    private String normalizeEmail(String email) {
+        String normalized = email == null ? "" : email.trim().toLowerCase();
+        if (normalized.isBlank()) {
+            throw new BadRequestException("Email must not be blank");
+        }
+        return normalized;
     }
 }

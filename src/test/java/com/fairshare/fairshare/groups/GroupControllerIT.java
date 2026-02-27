@@ -1,7 +1,6 @@
 package com.fairshare.fairshare.groups;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fairshare.fairshare.groups.api.AddMemberResponse;
 import com.fairshare.fairshare.groups.api.dto.CreateGroupRequest;
 import com.fairshare.fairshare.groups.api.dto.GroupUpdateRequest;
 import org.junit.jupiter.api.Test;
@@ -40,7 +39,7 @@ public class GroupControllerIT {
         assertThat(group.get("name").asText()).isEqualTo("Trip");
 
         // add member
-        var addReq = new com.fairshare.fairshare.groups.api.dto.AddMemberRequest("Alice");
+        var addReq = new com.fairshare.fairshare.groups.api.dto.AddMemberRequest("Alice", "alice+" + id + "@example.com", null);
         mvc.perform(post(String.format("/groups/%d/members", id))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(addReq)))

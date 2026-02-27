@@ -19,7 +19,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.hamcrest.Matchers.equalTo;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -83,7 +82,7 @@ public class PaginationIntegrationTest {
         Long gid = mapper.readTree(gresp).get("id").asLong();
 
         // Add member
-        String m1 = "{\"name\":\"payer\"}";
+        String m1 = String.format("{\"name\":\"payer\",\"email\":\"payer+%d@example.com\"}", gid);
         Long payerId = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
 
         // Create 5 expenses
@@ -122,7 +121,7 @@ public class PaginationIntegrationTest {
         Long gid = mapper.readTree(gresp).get("id").asLong();
 
         // Add member (generates an event)
-        String m1 = "{\"name\":\"user\"}";
+        String m1 = String.format("{\"name\":\"user\",\"email\":\"user+%d@example.com\"}", gid);
         Long userId = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
 
         // Create expense (generates an event)
@@ -148,9 +147,9 @@ public class PaginationIntegrationTest {
         Long gid = mapper.readTree(gresp).get("id").asLong();
 
         // Add members
-        String m1 = "{\"name\":\"fromUser\"}";
+        String m1 = String.format("{\"name\":\"fromUser\",\"email\":\"from-user+%d@example.com\"}", gid);
         Long fromUserId = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
-        String m2 = "{\"name\":\"toUser\"}";
+        String m2 = String.format("{\"name\":\"toUser\",\"email\":\"to-user+%d@example.com\"}", gid);
         Long toUserId = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
 
         // Confirm 3 transfers
@@ -184,9 +183,9 @@ public class PaginationIntegrationTest {
         Long gid = mapper.readTree(gresp).get("id").asLong();
 
         // Add members
-        String m1 = "{\"name\":\"user1\"}";
+        String m1 = String.format("{\"name\":\"user1\",\"email\":\"user1+%d@example.com\"}", gid);
         Long user1Id = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
-        String m2 = "{\"name\":\"user2\"}";
+        String m2 = String.format("{\"name\":\"user2\",\"email\":\"user2+%d@example.com\"}", gid);
         Long user2Id = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
 
         // Create expense where user1 pays 20, split equally

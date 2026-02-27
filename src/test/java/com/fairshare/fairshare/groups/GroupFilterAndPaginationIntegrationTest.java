@@ -122,9 +122,9 @@ public class GroupFilterAndPaginationIntegrationTest {
         long gid = created.get("id").asLong();
 
         // Add two members
-        mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"alice\"}"))
+        mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(String.format("{\"name\":\"alice\",\"email\":\"alice+%d@example.com\"}", gid)))
                 .andExpect(status().isCreated());
-        mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"bob\"}"))
+        mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(String.format("{\"name\":\"bob\",\"email\":\"bob+%d@example.com\"}", gid)))
                 .andExpect(status().isCreated());
 
         String getResp = mvc.perform(get("/groups/" + gid))

@@ -40,10 +40,10 @@ public class ConfirmSettlementsIntegrationTest {
         Long gid = gnode.get("id").asLong();
 
         // add two members
-        String m1 = "{\"name\":\"x\"}"; // Changed userName to name
-        Long x = Long.valueOf(mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong());
-        String m2 = "{\"name\":\"y\"}"; // Changed userName to name
-        Long y = Long.valueOf(mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong());
+        String m1 = String.format("{\"name\":\"x\",\"email\":\"x+%d@example.com\"}", gid);
+        Long x = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m1)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
+        String m2 = String.format("{\"name\":\"y\",\"email\":\"y+%d@example.com\"}", gid);
+        Long y = mapper.readTree(mvc.perform(post("/groups/" + gid + "/members").contentType(MediaType.APPLICATION_JSON).content(m2)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString()).get("userId").asLong();
 
         // manually apply a transfer between them using confirm endpoint with confirmationId
         String confirmationId = "confirm-abc-123";
