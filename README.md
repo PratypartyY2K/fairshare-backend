@@ -1,234 +1,154 @@
-# Fairshare-Backend
+# Fairshare Backend
 
-This document provides concise, up-to-date instructions for building, running, and testing the backend service in this
-repository.
+Spring Boot backend for group expense tracking, ledger calculation, settlement confirmation, and audit history.
 
-Last verified: 2026-02-13
+## Stack
 
-## Overview
+- Java 21
+- Spring Boot 3.5.7
+- Maven
+- Spring Data JPA
+- Flyway
+- PostgreSQL for local/dev
+- H2 for tests
 
-fairshare is a Spring Boot (Java) service for tracking group expenses, calculating ledgers and settlements, and
-recording confirmed transfers.
+## Run Locally
 
-## Prerequisites
+Create the local database once:
 
-- Java 21 (project property `<java.version>` in `pom.xml`)
-- Maven (use `mvn` from the command line)
-- PostgreSQL for production (the default datasource URL in `application.yml` points to
-  `jdbc:postgresql://localhost:5432/fairshare`). Tests use H2 in-memory DB.
+```bash
+createdb fairshare
+psql -c "CREATE USER fairshare_user WITH PASSWORD 'fairshare_pass';"
+psql -c "GRANT ALL PRIVILEGES ON DATABASE fairshare TO fairshare_user;"
+```
 
-## Build
+Then start the service:
 
-From repository root:
-
-mvn clean package
-
-or to run in development mode:
-
+```bash
 mvn spring-boot:run
+```
 
-The application main class is `com.fairshare.fairshare.FairshareApplication`.
+Default local configuration from [application.yml](/Users/pratyushkumar/Desktop/Pratyush/faireshare-mono-repo/fairshare-backend/src/main/resources/application.yml):
 
-## Configuration
+- Port: `8080`
+- JDBC URL: `jdbc:postgresql://localhost:5432/fairshare`
+- Username: `fairshare_user`
+- Password: `fairshare_pass`
+- Swagger UI: `http://localhost:8080/swagger`
 
-Default configuration is in `src/main/resources/application.yml`.
-Key defaults:
+## Database Notes
 
-- server.port: 8080
-- spring.datasource.url: jdbc:postgresql://localhost:5432/fairshare
-- spring.datasource.username/password: fairshare_user/fairshare_pass
+The backend now expects schema changes to be managed by Flyway, not by Hibernate auto-update.
 
-You can override properties via environment variables or command-line properties (e.g., `-Dserver.port=9090`).
+- `spring.jpa.hibernate.ddl-auto=validate`
+- Flyway is enabled
+- `baseline-on-migrate=true`
 
-## API Documentation (OpenAPI / Swagger)
+That means:
 
-The project includes Springdoc OpenAPI and exposes a Swagger UI at: http://localhost:8080/swagger
+- On a fresh database, Flyway creates and migrates the schema.
+- On an older non-empty local database, Flyway baselines it and then applies tracked migrations.
+- If local schema drift exists outside Flyway, startup will fail fast during validation instead of silently mutating tables.
+
+Migrations live in:
+
+- [src/main/resources/db/migration](/Users/pratyushkumar/Desktop/Pratyush/faireshare-mono-repo/fairshare-backend/src/main/resources/db/migration)
 
 ## Main Endpoints
 
-- GET /health — service health
-- GET / — root info
+Health:
 
-Groups (base path: /groups)
+- `GET /`
+- `GET /health`
 
-- POST /groups — create a group
-- GET /groups — list groups (supports pagination, sorting and filtering)
-- GET /groups/{groupId} — get group details
-- PATCH /groups/{groupId} — update group name
-- POST /groups/{groupId}/members — add a member
+Users:
 
-Users
+- `POST /users`
+- `GET /users/{userId}`
 
-- POST /users — create a user identity (returns user id for `X-User-Id`)
-- GET /users/{userId} — get user details
+Groups:
 
-Expenses (group-scoped: /groups/{groupId})
+- `POST /groups`
+- `GET /groups`
+- `GET /groups/{groupId}`
+- `PATCH /groups/{groupId}`
+- `POST /groups/{groupId}/members`
 
-- POST /groups/{groupId}/expenses — create an expense (supports equal, shares, exact amounts, percentages)
-- GET /groups/{groupId}/expenses — list expenses
-- GET /groups/{groupId}/ledger — get ledger (net balances)
-- GET /groups/{groupId}/settlements — get suggested settlement transfers
-- POST /groups/{groupId}/settlements/confirm — confirm (apply) settlement transfers (records transfers)
-- GET /groups/{groupId}/owes — compute owes using settlement suggestions
-- GET /groups/{groupId}/owes/historical — compute owes from recorded expense/payment history
+Expenses and ledger:
 
-## Features (complete list)
+- `POST /groups/{groupId}/expenses`
+- `GET /groups/{groupId}/expenses`
+- `PATCH /groups/{groupId}/expenses/{expenseId}`
+- `DELETE /groups/{groupId}/expenses/{expenseId}`
+- `GET /groups/{groupId}/ledger`
 
-This section enumerates the main features and endpoints the backend exposes. Use the Swagger
-UI (http://localhost:8080/swagger) for interactive exploration.
+Settlements and transfers:
 
-Groups
+- `GET /groups/{groupId}/settlements`
+- `POST /groups/{groupId}/settlements/confirm`
+- `GET /groups/{groupId}/confirmed-transfers`
+- `GET /groups/{groupId}/api/confirmation-id`
 
-- Create group: `POST /groups` — create a group by name.
-- List groups: `GET /groups` — paginated listing. Supports `page` (0-based), `pageSize`, `sort` (`property,asc|desc`),
-  and `name` (case-insensitive substring filter). **Response includes full member details** (`members` array with id and
-  name for each member) plus a computed `memberCount` field. This design choice trades response size for convenience,
-  allowing clients to display member information without additional requests. For groups with many members, clients may
-  prefer to use `GET /groups/{groupId}` for individual group details.
-- Get group: `GET /groups/{groupId}` — full group details including `members` and `memberCount`.
-- Update group name: `PATCH /groups/{groupId}` — rename a group.
-- Add member: `POST /groups/{groupId}/members` — adds a member (users are created implicitly by name when added).
+Audit and explanations:
 
-Expenses & Ledger
+- `GET /groups/{groupId}/events`
+- `GET /groups/{groupId}/explanations/ledger`
+- `GET /groups/{groupId}/owes`
+- `GET /groups/{groupId}/owes/historical`
 
-- Create expense: `POST /groups/{groupId}/expenses` — create an expense. Supports four split modes (only one may be
-  provided per request):
-    - equal — equal split among participants (default when no split provided)
-    - shares — integer share weights (e.g., [2,1,1])
-    - exactAmounts — explicit per-user amounts (must sum to total within $0.01 tolerance)
-    - percentages — percentage split (must sum to 100% within tolerance)
-      The API enforces currency normalization (scale=2, RoundingMode.HALF_UP) and distributes rounding leftover
-      deterministically by user id ascending.
-    - Optional `Idempotency-Key` header allows safe retrying of create requests (the server stores the key on the
-      created expense and returns the existing expense when the same key is reused).
-- Update expense: `PATCH /groups/{groupId}/expenses/{expenseId}` — replace description/amount/splits; ledger and
-  participant records are updated consistently and an `ExpenseUpdated` event is emitted.
-- Void expense: `DELETE /groups/{groupId}/expenses/{expenseId}` — mark expense as voided, revert its ledger effects and
-  emit `ExpenseVoided` event.
+## Auth Model
 
-Ledger, Settlements & Transfers
+The service supports header-based actor identity with `X-User-Id`.
 
-- Get ledger: `GET /groups/{groupId}/ledger` — returns net balances per user in the group.
-- Get settlements (suggested): `GET /groups/{groupId}/settlements` — computes suggested transfers to settle the ledger
-  using an internal settlement algorithm.
-- Confirm settlements: `POST /groups/{groupId}/settlements/confirm` — apply transfers as confirmed payments. Supports
-  `confirmationId` either in the body or via `Confirmation-Id` header to make confirmations idempotent. Returns a
-  confirmation id and number of applied transfers.
-- List confirmed transfers: `GET /groups/{groupId}/confirmed-transfers` — paginated listing of historical confirmed
-  transfers; optional `confirmationId` filter and date range filters.
+Current local default:
 
-Owes and Explanations
+- `fairshare.auth.required=false`
 
-- Owes (quick): `GET /groups/{groupId}/owes?fromUserId=X&toUserId=Y` — compute what X owes Y from suggested settlements.
-- Owes historical: `GET /groups/{groupId}/owes/historical?fromUserId=X&toUserId=Y` — compute using recorded expenses and
-  confirmed transfers (historical obligations minus payments).
-- Ledger explanation: `GET /groups/{groupId}/explanations/ledger` — detailed per-user contribution list (expenses paid,
-  shares, transfers sent/received) with timestamps for auditing.
+When auth is enabled:
 
-Events & Auditing
+- The actor can create groups
+- Group creators are added as `OWNER`
+- Owners can rename groups and add members
+- Members can read group-scoped data
+- Non-members get `403`
 
-- List expense events (audit log): `GET /groups/{groupId}/events` — paginated list of expense events (ExpenseCreated,
-  ExpenseUpdated, ExpenseVoided, etc.) with payloads and timestamps.
-- The service emits events for create/update/void actions and persists them to the DB for auditing.
+## API Behaviors Worth Knowing
 
-Pagination, Sorting & Filtering
-
-- Most list endpoints are paginated and return a `PaginatedResponse<T>` with `items`, `totalItems`, `totalPages`,
-  `currentPage`, and `pageSize`.
-- Sorting uses the `sort` parameter of the form `property,asc|desc`. The `SortUtils` helper safely parses sort strings
-  and falls back to defaults when invalid.
-- `memberCount` is a computed property in `GET /groups` responses and is supported as a sorting key — when sorting by
-  `memberCount` the service uses a native query path because `memberCount` is not a persisted entity field. Attempting
-  to sort by `memberCount` directly with JPA repository methods will produce an error ("No property 'memberCount' found
-  for type 'Group'").
-
-Data model notes & validations
-
-- Authentication/authorization:
-    - The service supports `X-User-Id` request-header authentication.
-    - Enforcement is controlled by `fairshare.auth.required` (default: `false` in `application.yml`).
-    - When enabled, all group-scoped endpoints require a valid authenticated actor.
-    - Authorization policy:
-        - Group owner can add members and rename the group.
-        - Group members can read group data and access expense/ledger/settlement endpoints.
-        - Non-members receive `403 Forbidden` for group-scoped access.
-    - Group creation with authenticated actor auto-adds the creator as `OWNER`.
-- Users are created implicitly when a member is added by name. Multiple users with the same display name are allowed (
-  users are identified internally by numeric id).
-- Expense inputs are validated: participants must be unique and members of the group; exactly one split mode may be
-  provided; amounts/percentages/shares must be internally consistent.
-- Currency handling: all monetary values are normalized to 2 decimal places (scale=2) using `RoundingMode.HALF_UP` for
-  normalization and deterministic rounding behavior for splits.
-- Idempotency for expense creation: the repository stores an `idempotencyKey` on the expense and the create path will
-  return an existing expense when the same key is provided.
-
-## Money Representation Contract
-
-The API uses a consistent representation for all monetary values to ensure correctness and prevent client-side bugs:
-
-**Format**: All money amounts are represented as **decimal strings** in JSON (not numbers).
-
-**Rules**:
-- The API accepts and returns monetary values as quoted strings in JSON (e.g., `"30.75"`, `"100.00"`).
-- All values are normalized to exactly 2 decimal places (scale=2), matching standard currency representation.
-- Rounding uses `RoundingMode.HALF_UP` (round to nearest neighbor; if equidistant, round up).
-- When splitting expenses, leftover cents from rounding are distributed deterministically by ascending user ID to ensure
-  the sum of splits exactly equals the total amount.
-
-**Why strings?** Using strings prevents precision loss from JSON number parsing and ensures consistent decimal
-arithmetic across all clients.
-
-**Examples**:
-- Valid: `"30.75"`, `"100.00"`, `"0.01"`
-- Invalid: `30.75` (unquoted number), `"30.7"` (missing trailing zero - will be normalized to `"30.70"` by the server)
-
-**Endpoints affected**: All money fields in requests and responses use this format, including:
-- `amount` in expense create/update requests
-- `shareAmount` in expense splits
-- `netBalance` in ledger entries
-- `amount` in settlement transfers and confirmed transfers
-- `exactAmounts` and `percentages` in split specifications
-
-Utilities and developer aids
-
-- Swagger/OpenAPI UI: `http://localhost:8080/swagger`
-- `GET /groups/{groupId}/api/confirmation-id` — generates a fresh UUID confirmation ID for use when confirming
-  settlements. This is a convenience endpoint to help clients generate idempotency keys. Returns:
-  ```json
-  {
-    "confirmationId": "d290f1ee-6c54-4b01-90e6-d701748f0851"
-  }
-  ```
-  Note: This endpoint is scoped to a specific group for consistency with other group-related endpoints, though the
-  generated UUID is not group-specific and can be used for any confirmation operation.
+- Group listing supports pagination, sorting, and case-insensitive `name` filtering.
+- `pageSize` is accepted as an alias for `size` on group listing.
+- When a requested page is out of range for filtered groups, the service clamps to the last available page.
+- Money values are represented as decimal strings in JSON to avoid precision loss.
+- Expense creation supports idempotency via the `Idempotency-Key` header.
+- Settlement confirmation supports idempotency via request body `confirmationId` or `Confirmation-Id` header.
 
 ## Tests
 
-Run unit/integration tests with:
+Run the backend test suite:
 
+```bash
 mvn test
+```
 
-Tests run against an in-memory H2 database. A set of integration tests exercise pagination, sorting, and name-filter
-behavior
-for the Groups API (see `src/test/java/com/fairshare/fairshare/groups`).
+Targeted integration tests that are useful when changing core behavior:
 
-If you see failures related to paging and name filtering (e.g., expected last-page behavior), ensure that the test
-database
-state matches the assumptions the test uses (tests create their own sample data). See the test classes for sample
-fixtures.
+```bash
+mvn -Dtest=GroupFilterAndPaginationIntegrationTest,ConfirmSettlementsIntegrationTest,EventsAndTransfersIntegrationTest,PaginationIntegrationTest test
+```
+
+Tests run against H2 using [src/test/resources/application.yml](/Users/pratyushkumar/Desktop/Pratyush/faireshare-mono-repo/fairshare-backend/src/test/resources/application.yml).
 
 ## Troubleshooting
 
-- If you encounter compilation errors, ensure Lombok annotation processing is enabled in your IDE.
-- If the service fails to connect to Postgres, either start a local Postgres instance or set `spring.datasource.url` to
-  a reachable DB.
-- Sorting by `memberCount` may return a server error if used with a direct JPA Sort because `memberCount` is not a real
-  entity property; the service maps that sort to a native query. If you hit `No property 'memberCount' found` in
-  stacktraces,
-  check that you are calling the `/groups` endpoint (the service handles `memberCount` specially) and not directly
-  invoking
-  a repository method.
+If startup fails with Flyway or schema validation errors:
 
-## Contributing
+- Check that PostgreSQL is running and reachable.
+- Make sure you are using the expected local database.
+- If the database was manually changed outside migrations, either repair it with a new Flyway migration or reset the local database.
 
-Please open issues or PRs with changes. Follow the existing code style and add tests for new behavior.
+If startup fails because the database is missing:
+
+```bash
+createdb fairshare
+```
+
+If the service builds but your IDE shows Lombok-related compile errors, enable annotation processing.
