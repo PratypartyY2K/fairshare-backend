@@ -1,20 +1,88 @@
 # Fairshare Backend
 
-Spring Boot backend for group expense tracking, ledger calculation, settlement confirmation, and audit history.
+The Fairshare backend is a ledger-oriented Spring Boot service for group expense accounting.
 
-## Stack
+It is designed around a simple idea: shared-expense systems should be explainable. Instead of treating balances as opaque totals, the service records expenses, ledger effects, settlement confirmations, and event history in a way that makes outcomes reproducible and inspectable.
+
+## What This Service Optimizes For
+
+- Correctness: balances are derived from explicit accounting behavior rather than ad hoc client-side math.
+- Explainability: users can inspect how expenses and transfers contributed to a current balance.
+- Determinism: money handling, split calculations, and leftover-cent distribution are stable and predictable.
+- Safety under retries: create and confirm flows support idempotent behavior.
+- Auditability: expense mutations and transfers are preserved as historical records.
+
+## System Model
+
+### Ledger-Backed Balances
+
+The service computes group balances from stored ledger entries and expense participation data. Current state is not just a UI convenience layer over totals; it is derived from persisted accounting effects.
+
+### Event History
+
+Expense lifecycle actions produce auditable events such as:
+
+- `ExpenseCreated`
+- `ExpenseUpdated`
+- `ExpenseVoided`
+- `TransferConfirmed`
+
+This makes the backend useful for debugging, trust, and future reporting.
+
+### Deterministic Money Rules
+
+Money values are normalized to scale 2 with explicit rounding behavior. Split calculations support equal, exact-amount, percentage, and share-based modes, with predictable leftover-cent distribution so repeated calculations converge to the same result.
+
+### Idempotent Writes
+
+- Expense creation supports the `Idempotency-Key` header.
+- Settlement confirmation supports caller-provided confirmation IDs and safe retry behavior.
+
+That keeps write operations resilient to duplicate submissions and client retries.
+
+## Tech Stack
 
 - Java 21
 - Spring Boot 3.5.7
 - Maven
 - Spring Data JPA
 - Flyway
-- PostgreSQL for local/dev
+- PostgreSQL for local development
 - H2 for tests
+- Springdoc OpenAPI / Swagger UI
 
-## Run Locally
+## Main Capabilities
 
-Create the local database once:
+### Groups And Membership
+
+- Create groups
+- List groups with filtering, sorting, and pagination
+- Rename groups
+- Add members to existing groups
+
+### Expenses
+
+- Create expenses with multiple split modes
+- List expenses with pagination and sorting
+- Update expenses
+- Void expenses while reversing ledger effects
+
+### Ledger And Settlements
+
+- Compute per-user ledger balances for a group
+- Compute suggested settlement transfers
+- Confirm transfers and persist settlement history
+- Query current and historical owes relationships
+
+### History And Explainability
+
+- Return group event history
+- Return confirmed transfer history
+- Explain balances at the user level from recorded expenses and transfers
+
+## Local Run
+
+### 1. Create the local database
 
 ```bash
 createdb fairshare
@@ -22,13 +90,13 @@ psql -c "CREATE USER fairshare_user WITH PASSWORD 'fairshare_pass';"
 psql -c "GRANT ALL PRIVILEGES ON DATABASE fairshare TO fairshare_user;"
 ```
 
-Then start the service:
+### 2. Start the service
 
 ```bash
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 
-Default local configuration from [application.yml](/Users/pratyushkumar/Desktop/Pratyush/faireshare-mono-repo/fairshare-backend/src/main/resources/application.yml):
+Default local configuration from [src/main/resources/application.yml](/Users/pratyushkumar/Desktop/Pratyush/faireshare-mono-repo/fairshare-backend/src/main/resources/application.yml):
 
 - Port: `8080`
 - JDBC URL: `jdbc:postgresql://localhost:5432/fairshare`
@@ -36,25 +104,7 @@ Default local configuration from [application.yml](/Users/pratyushkumar/Desktop/
 - Password: `fairshare_pass`
 - Swagger UI: `http://localhost:8080/swagger`
 
-## Database Notes
-
-The backend now expects schema changes to be managed by Flyway, not by Hibernate auto-update.
-
-- `spring.jpa.hibernate.ddl-auto=validate`
-- Flyway is enabled
-- `baseline-on-migrate=true`
-
-That means:
-
-- On a fresh database, Flyway creates and migrates the schema.
-- On an older non-empty local database, Flyway baselines it and then applies tracked migrations.
-- If local schema drift exists outside Flyway, startup will fail fast during validation instead of silently mutating tables.
-
-Migrations live in:
-
-- [src/main/resources/db/migration](/Users/pratyushkumar/Desktop/Pratyush/faireshare-mono-repo/fairshare-backend/src/main/resources/db/migration)
-
-## Main Endpoints
+## API Surface
 
 Health:
 
@@ -74,65 +124,79 @@ Groups:
 - `PATCH /groups/{groupId}`
 - `POST /groups/{groupId}/members`
 
-Expenses and ledger:
+Expenses, ledger, and settlements:
 
 - `POST /groups/{groupId}/expenses`
 - `GET /groups/{groupId}/expenses`
 - `PATCH /groups/{groupId}/expenses/{expenseId}`
 - `DELETE /groups/{groupId}/expenses/{expenseId}`
 - `GET /groups/{groupId}/ledger`
-
-Settlements and transfers:
-
 - `GET /groups/{groupId}/settlements`
 - `POST /groups/{groupId}/settlements/confirm`
 - `GET /groups/{groupId}/confirmed-transfers`
 - `GET /groups/{groupId}/api/confirmation-id`
 
-Audit and explanations:
+Audit and explanation endpoints:
 
 - `GET /groups/{groupId}/events`
 - `GET /groups/{groupId}/explanations/ledger`
 - `GET /groups/{groupId}/owes`
 - `GET /groups/{groupId}/owes/historical`
 
-## Auth Model
+Interactive API docs are exposed through Swagger at `http://localhost:8080/swagger`.
 
-The service supports header-based actor identity with `X-User-Id`.
+## Behavioral Guarantees
+
+- Group listing supports case-insensitive name filtering plus pagination and sorting.
+- `pageSize` is accepted as an alias for `size` on group listing.
+- Out-of-range filtered pages are clamped to the last available page.
+- JSON money values are returned as decimal strings to avoid precision loss in clients.
+- Expense creation accepts one split mode at a time: exact amounts, percentages, shares, or equal split.
+- Settlement confirmations can be retried safely with the same confirmation ID.
+
+## Authentication Model
+
+The service supports header-based actor identity via `X-User-Id`.
 
 Current local default:
 
 - `fairshare.auth.required=false`
 
-When auth is enabled:
+When auth is required:
 
-- The actor can create groups
-- Group creators are added as `OWNER`
-- Owners can rename groups and add members
-- Members can read group-scoped data
-- Non-members get `403`
+- group creators become `OWNER`
+- owners can rename groups and add members
+- group members can read group-scoped data
+- non-members receive `403`
 
-## API Behaviors Worth Knowing
+This is intentionally lightweight for local development. It is an authorization-aware backend with a simple actor model, not yet a full end-user authentication system.
 
-- Group listing supports pagination, sorting, and case-insensitive `name` filtering.
-- `pageSize` is accepted as an alias for `size` on group listing.
-- When a requested page is out of range for filtered groups, the service clamps to the last available page.
-- Money values are represented as decimal strings in JSON to avoid precision loss.
-- Expense creation supports idempotency via the `Idempotency-Key` header.
-- Settlement confirmation supports idempotency via request body `confirmationId` or `Confirmation-Id` header.
+## Database And Schema Management
 
-## Tests
+Schema changes are managed with Flyway rather than Hibernate auto-mutation.
 
-Run the backend test suite:
+- `spring.jpa.hibernate.ddl-auto=validate`
+- Flyway is enabled
+- `baseline-on-migrate=true`
+
+Operationally, that means:
+
+- a fresh database is created and migrated through tracked migrations
+- an older non-empty local database can be baselined and migrated forward
+- schema drift outside migrations fails fast during startup instead of being silently patched
+
+## Testing
+
+Run the full test suite:
 
 ```bash
-mvn test
+./mvnw test
 ```
 
-Targeted integration tests that are useful when changing core behavior:
+Useful targeted integration runs:
 
 ```bash
-mvn -Dtest=GroupFilterAndPaginationIntegrationTest,ConfirmSettlementsIntegrationTest,EventsAndTransfersIntegrationTest,PaginationIntegrationTest test
+./mvnw -Dtest=GroupFilterAndPaginationIntegrationTest,ConfirmSettlementsIntegrationTest,EventsAndTransfersIntegrationTest,PaginationIntegrationTest test
 ```
 
 Tests run against H2 using [src/test/resources/application.yml](/Users/pratyushkumar/Desktop/Pratyush/faireshare-mono-repo/fairshare-backend/src/test/resources/application.yml).
@@ -141,14 +205,14 @@ Tests run against H2 using [src/test/resources/application.yml](/Users/pratyushk
 
 If startup fails with Flyway or schema validation errors:
 
-- Check that PostgreSQL is running and reachable.
-- Make sure you are using the expected local database.
-- If the database was manually changed outside migrations, either repair it with a new Flyway migration or reset the local database.
+- make sure PostgreSQL is running
+- verify the database name, username, and password match local config
+- if the schema was changed manually, repair it with a migration or recreate the local database
 
-If startup fails because the database is missing:
+If the database does not exist:
 
 ```bash
 createdb fairshare
 ```
 
-If the service builds but your IDE shows Lombok-related compile errors, enable annotation processing.
+If your IDE reports Lombok-related compile issues, enable annotation processing.
