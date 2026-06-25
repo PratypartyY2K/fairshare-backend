@@ -1,44 +1,44 @@
 # Fairshare Backend
 
-The Fairshare backend is a ledger-oriented Spring Boot service for group expense accounting.
+The Fairshare backend is a Spring Boot service for group expense accounting.
 
-It is designed around a simple idea: shared-expense systems should be explainable. Instead of treating balances as opaque totals, the service records expenses, ledger effects, settlement confirmations, and event history in a way that makes outcomes reproducible and inspectable.
+The main design choice is that balances are derived, not hand-waved. The service stores expenses, participant shares, ledger effects, confirmed transfers, and a small event trail so a balance can be checked against history when something looks off.
 
 ## What This Service Optimizes For
 
-- Correctness: balances are derived from explicit accounting behavior rather than ad hoc client-side math.
-- Explainability: users can inspect how expenses and transfers contributed to a current balance.
-- Determinism: money handling, split calculations, and leftover-cent distribution are stable and predictable.
-- Safety under retries: create and confirm flows support idempotent behavior.
-- Auditability: expense mutations and transfers are preserved as historical records.
+- Correctness: balances come from persisted ledger effects, not recalculated client-side guesses.
+- Explainability: the API can show which expenses and transfers pushed a user positive or negative.
+- Determinism: split math, rounding, and leftover-cent assignment follow one path every time.
+- Safety under retries: create and confirm endpoints accept idempotency data so duplicate requests do not duplicate writes.
+- Auditability: edits, voids, and confirmed transfers leave a record behind.
 
 ## System Model
 
 ### Ledger-Backed Balances
 
-The service computes group balances from stored ledger entries and expense participation data. Current state is not just a UI convenience layer over totals; it is derived from persisted accounting effects.
+The service computes balances from ledger entries plus expense participation rows. I chose that over storing only net balances because debugging settlement bugs gets ugly fast when you cannot reconstruct how a number was produced.
 
 ### Event History
 
-Expense lifecycle actions produce auditable events such as:
+Expense lifecycle actions write events such as:
 
 - `ExpenseCreated`
 - `ExpenseUpdated`
 - `ExpenseVoided`
 - `TransferConfirmed`
 
-This makes the backend useful for debugging, trust, and future reporting.
+It is intentionally a thin event trail, not a full event-sourced rebuild path. The goal is to answer "what changed?" without forcing every read through an event replay model.
 
 ### Deterministic Money Rules
 
-Money values are normalized to scale 2 with explicit rounding behavior. Split calculations support equal, exact-amount, percentage, and share-based modes, with predictable leftover-cent distribution so repeated calculations converge to the same result.
+Money values are normalized to scale 2. Split calculations support equal, exact-amount, percentage, and share-based modes. When division leaves leftover cents, they are assigned in a stable order so the same input does not move money around between runs.
 
 ### Idempotent Writes
 
 - Expense creation supports the `Idempotency-Key` header.
 - Settlement confirmation supports caller-provided confirmation IDs and safe retry behavior.
 
-That keeps write operations resilient to duplicate submissions and client retries.
+That matters because payment flows and flaky clients retry requests in practice.
 
 ## Tech Stack
 
@@ -143,13 +143,13 @@ Audit and explanation endpoints:
 - `GET /groups/{groupId}/owes`
 - `GET /groups/{groupId}/owes/historical`
 
-Interactive API docs are exposed through Swagger at `http://localhost:8080/swagger`.
+Swagger is exposed at `http://localhost:8080/swagger`.
 
 ## Behavioral Guarantees
 
 - Group listing supports case-insensitive name filtering plus pagination and sorting.
 - `pageSize` is accepted as an alias for `size` on group listing.
-- Out-of-range filtered pages are clamped to the last available page.
+- Out-of-range filtered pages are clamped to the last available page instead of returning an empty page past the end.
 - JSON money values are returned as decimal strings to avoid precision loss in clients.
 - Expense creation accepts one split mode at a time: exact amounts, percentages, shares, or equal split.
 - Settlement confirmations can be retried safely with the same confirmation ID.
@@ -169,21 +169,21 @@ When auth is required:
 - group members can read group-scoped data
 - non-members receive `403`
 
-This is intentionally lightweight for local development. It is an authorization-aware backend with a simple actor model, not yet a full end-user authentication system.
+This is deliberately lightweight for local development. It enforces membership and owner rules, but it is not a full auth stack yet.
 
 ## Database And Schema Management
 
-Schema changes are managed with Flyway rather than Hibernate auto-mutation.
+Schema changes go through Flyway instead of Hibernate auto-mutation.
 
 - `spring.jpa.hibernate.ddl-auto=validate`
 - Flyway is enabled
 - `baseline-on-migrate=true`
 
-Operationally, that means:
+In practice:
 
 - a fresh database is created and migrated through tracked migrations
-- an older non-empty local database can be baselined and migrated forward
-- schema drift outside migrations fails fast during startup instead of being silently patched
+- an older non-empty local database can be baselined and moved forward
+- schema drift outside migrations fails at startup instead of being silently patched
 
 ## Testing
 
@@ -193,7 +193,7 @@ Run the full test suite:
 ./mvnw test
 ```
 
-Useful targeted integration runs:
+Useful targeted runs:
 
 ```bash
 ./mvnw -Dtest=GroupFilterAndPaginationIntegrationTest,ConfirmSettlementsIntegrationTest,EventsAndTransfersIntegrationTest,PaginationIntegrationTest test
@@ -207,7 +207,7 @@ If startup fails with Flyway or schema validation errors:
 
 - make sure PostgreSQL is running
 - verify the database name, username, and password match local config
-- if the schema was changed manually, repair it with a migration or recreate the local database
+- if the schema was changed manually, fix it with a migration or recreate the local database
 
 If the database does not exist:
 
