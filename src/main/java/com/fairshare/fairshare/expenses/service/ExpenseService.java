@@ -63,36 +63,31 @@ public class ExpenseService {
         this.em = em;
     }
 
-    // Currency normalization helper: enforce scale=2 and HALF_UP rounding, non-null, non-negative
-    private static BigDecimal normalizeCurrency(BigDecimal v) {
-        if (v == null) throw new IllegalArgumentException("Amount cannot be null");
-        BigDecimal norm = v.setScale(2, RoundingMode.HALF_UP);
-        if (norm.compareTo(BigDecimal.ZERO) < 0) throw new IllegalArgumentException("Amount must be non-negative");
-        return norm;
+    private static BigDecimal normalizeAmount(BigDecimal amount) {
+        if (amount == null) throw new IllegalArgumentException("Amount cannot be null");
+        BigDecimal normalized = amount.setScale(2, RoundingMode.HALF_UP);
+        if (normalized.compareTo(BigDecimal.ZERO) < 0) throw new IllegalArgumentException("Amount must be non-negative");
+        return normalized;
     }
 
     @Transactional
     public ExpenseResponse createExpense(Long groupId, Long actorUserId, CreateExpenseRequest req, String idempotencyKey) {
         requireActorMember(groupId, actorUserId);
-        // If idempotency key provided, return existing expense if one was already created for this group+key
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             var existing = expenseRepo.findByGroupIdAndIdempotencyKey(groupId, idempotencyKey);
             if (existing.isPresent()) {
-                Expense ex = existing.get();
-                // rebuild shares map from participantRepo
+                Expense expense = existing.get();
                 Map<Long, BigDecimal> shares = new LinkedHashMap<>();
-                for (ExpenseParticipant p : participantRepo.findByExpense_Id(ex.getId())) {
-                    shares.put(p.getUserId(), p.getShareAmount());
+                for (ExpenseParticipant participant : participantRepo.findByExpense_Id(expense.getId())) {
+                    shares.put(participant.getUserId(), participant.getShareAmount());
                 }
-                return toExpenseResponse(ex, shares);
+                return toExpenseResponse(expense, shares);
             }
         }
 
-        // normalize and validate total amount (currency contract: scale 2, HALF_UP)
         if (req.amount() == null) throw new BadRequestException("Amount must be provided");
-        BigDecimal totalAmount = normalizeCurrency(req.amount());
+        BigDecimal totalAmount = normalizeAmount(req.amount());
 
-        // participants
         List<Long> participantUserIds = req.participantUserIds();
         if (participantUserIds == null || participantUserIds.isEmpty()) {
             participantUserIds = groupMemberRepo.findByGroupId(groupId).stream()
@@ -100,189 +95,172 @@ public class ExpenseService {
                     .toList();
         }
 
-        // validator: participants unique
-        LinkedHashSet<Long> uniq = new LinkedHashSet<>(participantUserIds);
-        if (uniq.size() != participantUserIds.size()) {
+        LinkedHashSet<Long> uniqueParticipantIds = new LinkedHashSet<>(participantUserIds);
+        if (uniqueParticipantIds.size() != participantUserIds.size()) {
             throw new BadRequestException("Participants must be unique");
         }
 
-        // ensure payer and participants are members
         Long payer = req.payerUserId();
         requireMember(groupId, payer);
         for (Long uid : participantUserIds) requireMember(groupId, uid);
 
-        // ensure participants includes payer (will be added later)
         LinkedHashSet<Long> participants = new LinkedHashSet<>(participantUserIds);
         participants.add(payer);
 
-        List<Long> ids = new ArrayList<>(participants);
+        List<Long> splitUserIds = new ArrayList<>(participants);
 
-        // Determine shares mapping based on requested split mode
-        Map<Long, BigDecimal> sharesMap;
+        Map<Long, BigDecimal> calculatedShares;
 
-        // Enforce that exactly one split mode is provided
-        int splitModes = 0;
+        int splitModeCount = 0;
         List<String> providedModes = new ArrayList<>();
         if (req.getExactAmounts() != null && !req.getExactAmounts().isEmpty()) {
-            splitModes++;
+            splitModeCount++;
             providedModes.add("exactAmounts");
         }
         if (req.getPercentages() != null && !req.getPercentages().isEmpty()) {
-            splitModes++;
+            splitModeCount++;
             providedModes.add("percentages");
         }
         if (req.getShares() != null && !req.getShares().isEmpty()) {
-            splitModes++;
+            splitModeCount++;
             providedModes.add("shares");
         }
 
-        if (splitModes > 1) {
+        if (splitModeCount > 1) {
             throw new BadRequestException("Only one split mode can be provided. Found: " + String.join(", ", providedModes));
         }
 
-        // Mode precedence: exactAmounts > percentages > shares > equal
         if (req.getExactAmounts() != null && !req.getExactAmounts().isEmpty()) {
-            var exact = req.getExactAmounts();
-            if (exact.size() != participantUserIds.size()) {
+            var exactAmounts = req.getExactAmounts();
+            if (exactAmounts.size() != participantUserIds.size()) {
                 throw new BadRequestException("exactAmounts length must match participantUserIds length");
             }
-            // map each participantUserIds order to exact amount, then include payer if not present
-            Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
+            Map<Long, BigDecimal> requestedShares = new LinkedHashMap<>();
             for (int i = 0; i < participantUserIds.size(); i++) {
-                BigDecimal v = normalizeCurrency(exact.get(i));
-                tmp.put(participantUserIds.get(i), v);
+                requestedShares.put(participantUserIds.get(i), normalizeAmount(exactAmounts.get(i)));
             }
-            // if payer wasn't in participantUserIds, add their share as 0 (they'll be included in participants list later)
-            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            if (!requestedShares.containsKey(payer)) {
+                requestedShares.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            }
 
-            // validation: all non-negative and sum to amount within tolerance 0.01
-            BigDecimal sum = tmp.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
-            BigDecimal tol = new BigDecimal("0.01");
-            if (sum.subtract(totalAmount).abs().compareTo(tol) > 0) {
+            BigDecimal requestedTotal = requestedShares.values().stream()
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal tolerance = new BigDecimal("0.01");
+            if (requestedTotal.subtract(totalAmount).abs().compareTo(tolerance) > 0) {
                 throw new BadRequestException("Exact amounts must sum to total amount within $0.01 tolerance");
             }
 
-            // If there is minor rounding difference, adjust by distributing leftover cents stably
-            sharesMap = distributeLeftover(tmp, totalAmount);
+            calculatedShares = rebalanceRoundedShares(requestedShares, totalAmount);
 
         } else if (req.getPercentages() != null && !req.getPercentages().isEmpty()) {
-            var pct = req.getPercentages();
-            if (pct.size() != participantUserIds.size()) {
+            var percentages = req.getPercentages();
+            if (percentages.size() != participantUserIds.size()) {
                 throw new BadRequestException("percentages length must match participantUserIds length");
             }
-            BigDecimal sumPct = pct.stream().reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
-            BigDecimal pctTol = new BigDecimal("0.01");
-            if (sumPct.subtract(new BigDecimal("100")).abs().compareTo(pctTol) > 0) {
+            BigDecimal percentageTotal = percentages.stream().reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal tolerance = new BigDecimal("0.01");
+            if (percentageTotal.subtract(new BigDecimal("100")).abs().compareTo(tolerance) > 0) {
                 throw new BadRequestException("Percentages must sum to 100% within 0.01 tolerance");
             }
 
-            Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
+            Map<Long, BigDecimal> requestedShares = new LinkedHashMap<>();
             for (int i = 0; i < participantUserIds.size(); i++) {
-                BigDecimal share = totalAmount.multiply(pct.get(i))
+                BigDecimal share = totalAmount.multiply(percentages.get(i))
                         .divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP);
-                tmp.put(participantUserIds.get(i), share.setScale(2, RoundingMode.DOWN)); // floor to 2 decimals
+                requestedShares.put(participantUserIds.get(i), share.setScale(2, RoundingMode.DOWN));
             }
 
-            // ensure payer present
-            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            if (!requestedShares.containsKey(payer)) {
+                requestedShares.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            }
 
-            sharesMap = distributeLeftover(tmp, totalAmount);
+            calculatedShares = rebalanceRoundedShares(requestedShares, totalAmount);
 
         } else if (req.getShares() != null && !req.getShares().isEmpty()) {
-            var s = req.getShares();
-            if (s.size() != participantUserIds.size()) {
+            var shareWeights = req.getShares();
+            if (shareWeights.size() != participantUserIds.size()) {
                 throw new BadRequestException("shares length must match participantUserIds length");
             }
-            int total = s.stream().mapToInt(Integer::intValue).sum();
-            if (total <= 0) throw new BadRequestException("Sum of shares must be positive");
+            int totalWeight = shareWeights.stream().mapToInt(Integer::intValue).sum();
+            if (totalWeight <= 0) throw new BadRequestException("Sum of shares must be positive");
 
-            Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
+            Map<Long, BigDecimal> requestedShares = new LinkedHashMap<>();
             for (int i = 0; i < participantUserIds.size(); i++) {
-                BigDecimal fraction = new BigDecimal(s.get(i)).divide(new BigDecimal(total), 10, RoundingMode.HALF_UP);
+                BigDecimal fraction = new BigDecimal(shareWeights.get(i)).divide(new BigDecimal(totalWeight), 10, RoundingMode.HALF_UP);
                 BigDecimal share = totalAmount.multiply(fraction).setScale(2, RoundingMode.DOWN);
-                tmp.put(participantUserIds.get(i), share);
+                requestedShares.put(participantUserIds.get(i), share);
             }
-            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            sharesMap = distributeLeftover(tmp, totalAmount);
+            if (!requestedShares.containsKey(payer)) {
+                requestedShares.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            }
+            calculatedShares = rebalanceRoundedShares(requestedShares, totalAmount);
 
         } else {
-            // equal split
-            sharesMap = equalSplit(totalAmount, ids);
+            calculatedShares = splitEqually(totalAmount, splitUserIds);
         }
 
-        // Save expense (use idempotencyKey-aware constructor if provided)
         Expense expense;
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             expense = new Expense(groupId, payer, req.description().trim(), totalAmount, idempotencyKey);
         } else {
             expense = new Expense(groupId, payer, req.description().trim(), totalAmount);
         }
-        // ensure not null and explicitly set to false so that findByGroupIdAndVoidedFalse picks it up
         expense.setVoided(false);
         expense = expenseRepo.save(expense);
 
-        for (var e : sharesMap.entrySet()) {
-            // ensure stored shares are scale-2
-            BigDecimal normalizedShare = normalizeCurrency(e.getValue());
-            participantRepo.save(new ExpenseParticipant(expense, e.getKey(), normalizedShare));
+        for (var shareEntry : calculatedShares.entrySet()) {
+            participantRepo.save(new ExpenseParticipant(expense, shareEntry.getKey(), normalizeAmount(shareEntry.getValue())));
         }
 
-        // Ledger updates
-        ledger(groupId, payer).add(totalAmount);
-        for (var e : sharesMap.entrySet()) {
-            ledger(groupId, e.getKey()).add(e.getValue().negate());
+        getOrCreateLedgerEntry(groupId, payer).add(totalAmount);
+        for (var shareEntry : calculatedShares.entrySet()) {
+            getOrCreateLedgerEntry(groupId, shareEntry.getKey()).add(shareEntry.getValue().negate());
         }
 
-        // persist creation event
         String createdPayload = String.format("{\"expenseId\":%d,\"amount\":\"%s\"}", expense.getId(), expense.getAmount());
         eventRepo.save(new ExpenseEvent(groupId, expense.getId(), "ExpenseCreated", createdPayload));
 
-        return toExpenseResponse(expense, sharesMap);
+        return toExpenseResponse(expense, calculatedShares);
     }
 
-    /**
-     * Distribute leftover cents so that the final rounded sums equal totalAmount.
-     * tmpMap is mapping from userId->floor(amount to 2 decimals) or possibly exact set
-     */
-    private Map<Long, BigDecimal> distributeLeftover(Map<Long, BigDecimal> tmpMap, BigDecimal totalAmount) {
-        // Work on a linked map to preserve insertion order (participantUserIds order), but requirement asks to distribute by userId ascending
-        // We'll create a list sorted by userId ascending as requested
-        List<Map.Entry<Long, BigDecimal>> entries = new ArrayList<>(tmpMap.entrySet());
+    private Map<Long, BigDecimal> rebalanceRoundedShares(Map<Long, BigDecimal> roundedShares, BigDecimal totalAmount) {
+        List<Map.Entry<Long, BigDecimal>> entries = new ArrayList<>(roundedShares.entrySet());
         entries.sort(Map.Entry.comparingByKey());
 
-        // ensure all entries are scaled to 2
-        Map<Long, BigDecimal> scaled = new LinkedHashMap<>();
-        for (Map.Entry<Long, BigDecimal> e : entries) {
-            scaled.put(e.getKey(), normalizeCurrency(e.getValue()));
+        Map<Long, BigDecimal> normalizedShares = new LinkedHashMap<>();
+        for (Map.Entry<Long, BigDecimal> entry : entries) {
+            normalizedShares.put(entry.getKey(), normalizeAmount(entry.getValue()));
         }
 
-        BigDecimal sum = scaled.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal diff = totalAmount.setScale(2, RoundingMode.HALF_UP).subtract(sum).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal allocatedTotal = normalizedShares.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal remainder = totalAmount.setScale(2, RoundingMode.HALF_UP).subtract(allocatedTotal).setScale(2, RoundingMode.HALF_UP);
 
-        int cents = diff.movePointRight(2).intValueExact(); // may be negative or positive
+        int remainingCents = remainder.movePointRight(2).intValueExact();
 
-        Map<Long, BigDecimal> out = new LinkedHashMap<>();
-        for (Map.Entry<Long, BigDecimal> e : entries) out.put(e.getKey(), scaled.get(e.getKey()));
+        Map<Long, BigDecimal> rebalancedShares = new LinkedHashMap<>();
+        for (Map.Entry<Long, BigDecimal> entry : entries) {
+            rebalancedShares.put(entry.getKey(), normalizedShares.get(entry.getKey()));
+        }
 
         int i = 0;
         int n = entries.size();
-        while (cents > 0) {
+        while (remainingCents > 0) {
             Long id = entries.get(i % n).getKey();
-            out.put(id, out.get(id).add(new BigDecimal("0.01")));
+            rebalancedShares.put(id, rebalancedShares.get(id).add(new BigDecimal("0.01")));
             i++;
-            cents--;
+            remainingCents--;
         }
-        while (cents < 0) {
+        while (remainingCents < 0) {
             Long id = entries.get(i % n).getKey();
-            out.put(id, out.get(id).subtract(new BigDecimal("0.01")));
+            rebalancedShares.put(id, rebalancedShares.get(id).subtract(new BigDecimal("0.01")));
             i++;
-            cents++;
+            remainingCents++;
         }
 
-        // final normalization
-        out.replaceAll((k, v) -> normalizeCurrency(v));
+        rebalancedShares.replaceAll((k, v) -> normalizeAmount(v));
 
-        return out;
+        return rebalancedShares;
     }
 
     @Transactional
@@ -331,10 +309,6 @@ public class ExpenseService {
         );
     }
 
-    private Sort parseSort(String sort) {
-        return SortUtils.parseSort(sort, "createdAt,desc");
-    }
-
     private ExpenseResponse toExpenseResponse(Expense expense, Map<Long, BigDecimal> shares) {
         var splits = shares.entrySet().stream()
                 .map(x -> new ExpenseResponse.Split(x.getKey(), x.getValue()))
@@ -378,17 +352,16 @@ public class ExpenseService {
             if (t.getAmount() == null || t.getAmount().signum() <= 0) {
                 throw new BadRequestException("Transfer amount must be positive");
             }
-            BigDecimal amt = normalizeCurrency(t.getAmount());
+            BigDecimal amt = normalizeAmount(t.getAmount());
             if (amt.signum() <= 0) throw new BadRequestException("Transfer amount must be positive and non-zero");
 
             Long from = t.getFromUserId();
             Long to = t.getToUserId();
-            // membership validation
             requireMember(groupId, from);
             requireMember(groupId, to);
 
-            LedgerEntry fromEntry = ledger(groupId, from);
-            LedgerEntry toEntry = ledger(groupId, to);
+            LedgerEntry fromEntry = getOrCreateLedgerEntry(groupId, from);
+            LedgerEntry toEntry = getOrCreateLedgerEntry(groupId, to);
 
             fromEntry.add(amt);
             toEntry.add(amt.negate());
@@ -396,7 +369,6 @@ public class ExpenseService {
             ledgerRepo.save(fromEntry);
             ledgerRepo.save(toEntry);
 
-            // persist confirmed transfer for historical tracking (store normalized amount + confirmation id if provided)
             ConfirmedTransfer ct = new ConfirmedTransfer(groupId, from, to, amt, confirmationId);
             confirmedTransferRepo.save(ct);
             appliedCount++;
@@ -407,14 +379,11 @@ public class ExpenseService {
     @Transactional
     public BigDecimal amountOwedHistorical(Long groupId, Long actorUserId, Long fromUserId, Long toUserId) {
         requireActorMember(groupId, actorUserId);
-        // Validate members
         requireMember(groupId, fromUserId);
         requireMember(groupId, toUserId);
 
-        // obligations: sum of share_amount where expense.payer = toUserId and participant = fromUserId
         BigDecimal obligations = participantRepo.sumShareByGroupAndPayerAndUser(groupId, toUserId, fromUserId);
 
-        // payments: sum of confirmed transfers from fromUserId to toUserId
         BigDecimal payments = confirmedTransferRepo.sumConfirmedAmount(groupId, fromUserId, toUserId);
 
         return obligations.subtract(payments).setScale(2, RoundingMode.HALF_UP);
@@ -433,29 +402,28 @@ public class ExpenseService {
         }
     }
 
-    private LedgerEntry ledger(Long groupId, Long userId) {
+    private LedgerEntry getOrCreateLedgerEntry(Long groupId, Long userId) {
         return ledgerRepo.findByGroupIdAndUserId(groupId, userId)
                 .orElseGet(() -> ledgerRepo.save(new LedgerEntry(groupId, userId)));
     }
 
-    private Map<Long, BigDecimal> equalSplit(BigDecimal amount, List<Long> userIds) {
-        int n = userIds.size();
+    private Map<Long, BigDecimal> splitEqually(BigDecimal amount, List<Long> userIds) {
+        int participantCount = userIds.size();
 
-        BigDecimal base = amount.divide(BigDecimal.valueOf(n), 2, RoundingMode.DOWN);
-        BigDecimal totalBase = base.multiply(BigDecimal.valueOf(n));
-        BigDecimal remainder = amount.subtract(totalBase); // 0.00 to 0.99
+        BigDecimal baseShare = amount.divide(BigDecimal.valueOf(participantCount), 2, RoundingMode.DOWN);
+        BigDecimal allocatedTotal = baseShare.multiply(BigDecimal.valueOf(participantCount));
+        BigDecimal remainder = amount.subtract(allocatedTotal);
 
-        Map<Long, BigDecimal> out = new LinkedHashMap<>();
-        for (Long id : userIds) out.put(id, base);
+        Map<Long, BigDecimal> equalShares = new LinkedHashMap<>();
+        for (Long id : userIds) equalShares.put(id, baseShare);
 
         int cents = remainder.movePointRight(2).intValueExact();
         for (int i = 0; i < cents; i++) {
-            Long id = userIds.get(i % n);
-            out.put(id, out.get(id).add(new BigDecimal("0.01")));
+            Long id = userIds.get(i % participantCount);
+            equalShares.put(id, equalShares.get(id).add(new BigDecimal("0.01")));
         }
-        // final normalization
-        out.replaceAll((k, v) -> normalizeCurrency(v));
-        return out;
+        equalShares.replaceAll((k, v) -> normalizeAmount(v));
+        return equalShares;
     }
 
     @Transactional
@@ -479,161 +447,142 @@ public class ExpenseService {
     public ExpenseResponse updateExpense(Long groupId, Long actorUserId, Long expenseId, CreateExpenseRequest req) {
         requireActorMember(groupId, actorUserId);
         Expense ex = expenseRepo.findById(expenseId).orElseThrow(() -> new NotFoundException("Expense not found"));
-        // Acquire a pessimistic lock on the expense row to serialize concurrent updates and avoid unique constraint races
         em.lock(ex, LockModeType.PESSIMISTIC_WRITE);
         if (!ex.getGroupId().equals(groupId)) throw new BadRequestException("Expense does not belong to group");
         if (ex.isVoided()) throw new BadRequestException("Expense is voided");
 
-        // build current shares
         Map<Long, BigDecimal> oldShares = new LinkedHashMap<>();
         for (ExpenseParticipant p : participantRepo.findByExpense_Id(expenseId))
             oldShares.put(p.getUserId(), p.getShareAmount());
         BigDecimal oldTotal = ex.getAmount();
 
-        // Reuse create logic for determining new sharesMap and validations (but don't create new expense in DB here)
         List<Long> participantUserIds = req.participantUserIds();
         if (participantUserIds == null || participantUserIds.isEmpty()) {
             participantUserIds = new ArrayList<>(oldShares.keySet());
         }
 
-        // validate unique and membership
-        LinkedHashSet<Long> uniq = new LinkedHashSet<>(participantUserIds);
-        if (uniq.size() != participantUserIds.size()) throw new BadRequestException("Participants must be unique");
+        LinkedHashSet<Long> uniqueParticipantIds = new LinkedHashSet<>(participantUserIds);
+        if (uniqueParticipantIds.size() != participantUserIds.size()) throw new BadRequestException("Participants must be unique");
         Long payer = req.payerUserId();
         requireMember(groupId, payer);
         for (Long uid : participantUserIds) requireMember(groupId, uid);
         LinkedHashSet<Long> participants = new LinkedHashSet<>(participantUserIds);
         participants.add(payer);
-        List<Long> ids = new ArrayList<>(participants);
+        List<Long> splitUserIds = new ArrayList<>(participants);
 
-        // compute new sharesMap using same precedence logic as createExpense
         Map<Long, BigDecimal> newShares;
-        BigDecimal totalAmount = normalizeCurrency(req.amount());
+        BigDecimal totalAmount = normalizeAmount(req.amount());
 
-        // Enforce that exactly one split mode is provided
-        int splitModes = 0;
+        int splitModeCount = 0;
         List<String> providedModes = new ArrayList<>();
         if (req.getExactAmounts() != null && !req.getExactAmounts().isEmpty()) {
-            splitModes++;
+            splitModeCount++;
             providedModes.add("exactAmounts");
         }
         if (req.getPercentages() != null && !req.getPercentages().isEmpty()) {
-            splitModes++;
+            splitModeCount++;
             providedModes.add("percentages");
         }
         if (req.getShares() != null && !req.getShares().isEmpty()) {
-            splitModes++;
+            splitModeCount++;
             providedModes.add("shares");
         }
 
-        if (splitModes > 1) {
+        if (splitModeCount > 1) {
             throw new BadRequestException("Only one split mode can be provided. Found: " + String.join(", ", providedModes));
         }
 
         if (req.getExactAmounts() != null && !req.getExactAmounts().isEmpty()) {
-            var exact = req.getExactAmounts();
-            if (exact.size() != participantUserIds.size())
+            var exactAmounts = req.getExactAmounts();
+            if (exactAmounts.size() != participantUserIds.size())
                 throw new BadRequestException("exactAmounts length must match participantUserIds length");
-            Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
+            Map<Long, BigDecimal> requestedShares = new LinkedHashMap<>();
             for (int i = 0; i < participantUserIds.size(); i++)
-                tmp.put(participantUserIds.get(i), normalizeCurrency(exact.get(i)));
-            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            newShares = distributeLeftover(tmp, totalAmount);
+                requestedShares.put(participantUserIds.get(i), normalizeAmount(exactAmounts.get(i)));
+            if (!requestedShares.containsKey(payer)) requestedShares.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            newShares = rebalanceRoundedShares(requestedShares, totalAmount);
         } else if (req.getPercentages() != null && !req.getPercentages().isEmpty()) {
-            var pct = req.getPercentages();
-            if (pct.size() != participantUserIds.size())
+            var percentages = req.getPercentages();
+            if (percentages.size() != participantUserIds.size())
                 throw new BadRequestException("percentages length must match participantUserIds length");
-            BigDecimal sumPct = pct.stream().reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
-            if (sumPct.subtract(new BigDecimal("100")).abs().compareTo(new BigDecimal("0.01")) > 0)
+            BigDecimal percentageTotal = percentages.stream().reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+            if (percentageTotal.subtract(new BigDecimal("100")).abs().compareTo(new BigDecimal("0.01")) > 0)
                 throw new BadRequestException("Percentages must sum to 100% within 0.01 tolerance");
-            Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
+            Map<Long, BigDecimal> requestedShares = new LinkedHashMap<>();
             for (int i = 0; i < participantUserIds.size(); i++)
-                tmp.put(
+                requestedShares.put(
                         participantUserIds.get(i),
-                        totalAmount.multiply(pct.get(i))
+                        totalAmount.multiply(percentages.get(i))
                                 .divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP)
                                 .setScale(2, RoundingMode.DOWN)
                 );
-            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            newShares = distributeLeftover(tmp, totalAmount);
+            if (!requestedShares.containsKey(payer)) requestedShares.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            newShares = rebalanceRoundedShares(requestedShares, totalAmount);
         } else if (req.getShares() != null && !req.getShares().isEmpty()) {
-            var s = req.getShares();
-            if (s.size() != participantUserIds.size())
+            var shareWeights = req.getShares();
+            if (shareWeights.size() != participantUserIds.size())
                 throw new BadRequestException("shares length must match participantUserIds length");
-            int total = s.stream().mapToInt(Integer::intValue).sum();
-            if (total <= 0) throw new BadRequestException("Sum of shares must be positive");
-            Map<Long, BigDecimal> tmp = new LinkedHashMap<>();
+            int totalWeight = shareWeights.stream().mapToInt(Integer::intValue).sum();
+            if (totalWeight <= 0) throw new BadRequestException("Sum of shares must be positive");
+            Map<Long, BigDecimal> requestedShares = new LinkedHashMap<>();
             for (int i = 0; i < participantUserIds.size(); i++) {
-                BigDecimal fraction = new BigDecimal(s.get(i)).divide(new BigDecimal(total), 10, RoundingMode.HALF_UP);
-                tmp.put(participantUserIds.get(i), totalAmount.multiply(fraction).setScale(2, RoundingMode.DOWN));
+                BigDecimal fraction = new BigDecimal(shareWeights.get(i)).divide(new BigDecimal(totalWeight), 10, RoundingMode.HALF_UP);
+                requestedShares.put(participantUserIds.get(i), totalAmount.multiply(fraction).setScale(2, RoundingMode.DOWN));
             }
-            if (!tmp.containsKey(payer)) tmp.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-            newShares = distributeLeftover(tmp, totalAmount);
+            if (!requestedShares.containsKey(payer)) requestedShares.put(payer, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+            newShares = rebalanceRoundedShares(requestedShares, totalAmount);
         } else {
-            newShares = equalSplit(totalAmount, ids);
+            newShares = splitEqually(totalAmount, splitUserIds);
         }
 
-        // compute ledger deltas: payer delta = newTotal - oldTotal; for each participant delta = -(newShare - oldShare)
         BigDecimal payerDelta = totalAmount.subtract(oldTotal).setScale(2, RoundingMode.HALF_UP);
-        LedgerEntry payerEntry = ledger(groupId, payer);
+        LedgerEntry payerEntry = getOrCreateLedgerEntry(groupId, payer);
         payerEntry.add(payerDelta);
         ledgerRepo.save(payerEntry);
 
-        // Update participants safely: update existing, insert new, delete removed
-        // Fetch existing participant entities keyed by userId
         List<ExpenseParticipant> existingEntities = participantRepo.findByExpense_Id(expenseId);
         Map<Long, ExpenseParticipant> existingByUser = existingEntities.stream()
                 .collect(Collectors.toMap(ExpenseParticipant::getUserId, ep -> ep, (a, b) -> a, LinkedHashMap::new));
 
-        // Process newShares: compute per-user ledger deltas and apply updates/inserts
-        for (Map.Entry<Long, BigDecimal> en : newShares.entrySet()) {
-            Long uid = en.getKey();
-            BigDecimal newShare = normalizeCurrency(en.getValue());
+        for (Map.Entry<Long, BigDecimal> shareEntry : newShares.entrySet()) {
+            Long uid = shareEntry.getKey();
+            BigDecimal newShare = normalizeAmount(shareEntry.getValue());
 
             BigDecimal oldShare = existingByUser.containsKey(uid) ? existingByUser.get(uid).getShareAmount() : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
-            // participant delta to apply to ledger: oldShare - newShare (because participant ledger stores negative shares)
             BigDecimal participantDelta = oldShare.subtract(newShare).setScale(2, RoundingMode.HALF_UP);
-            LedgerEntry le = ledger(groupId, uid);
-            le.add(participantDelta);
-            ledgerRepo.save(le);
+            LedgerEntry ledgerEntry = getOrCreateLedgerEntry(groupId, uid);
+            ledgerEntry.add(participantDelta);
+            ledgerRepo.save(ledgerEntry);
 
             if (existingByUser.containsKey(uid)) {
-                ExpenseParticipant ent = existingByUser.get(uid);
-                // if share changed, update
-                if (ent.getShareAmount().compareTo(newShare) != 0) {
-                    // Delete any existing participant row for this expense+user and insert the new value deterministically
+                ExpenseParticipant existingParticipant = existingByUser.get(uid);
+                if (existingParticipant.getShareAmount().compareTo(newShare) != 0) {
                     participantRepo.deleteByExpense_IdAndUserId(expenseId, uid);
                     participantRepo.flush();
                     participantRepo.save(new ExpenseParticipant(ex, uid, newShare));
                 }
-                // mark as processed
                 existingByUser.remove(uid);
             } else {
-                // insert new participant (no optimistic exists checks here; existingByUser was built from DB snapshot above)
                 participantRepo.deleteByExpense_IdAndUserId(expenseId, uid);
                 participantRepo.flush();
                 participantRepo.save(new ExpenseParticipant(ex, uid, newShare));
             }
         }
 
-        // Any remaining in existingByUser are participants removed in the update -> delete and revert ledger
         for (ExpenseParticipant removed : existingByUser.values()) {
             Long uid = removed.getUserId();
             BigDecimal oldShare = removed.getShareAmount();
-            // revert ledger: add oldShare (oldShare - 0)
-            LedgerEntry le = ledger(groupId, uid);
-            le.add(oldShare);
-            ledgerRepo.save(le);
+            LedgerEntry ledgerEntry = getOrCreateLedgerEntry(groupId, uid);
+            ledgerEntry.add(oldShare);
+            ledgerRepo.save(ledgerEntry);
             participantRepo.delete(removed);
         }
 
-        // update expense record
         ex.setAmount(totalAmount);
         ex.setDescription(req.description().trim());
         expenseRepo.save(ex);
 
-        // persist event
         String payload = String.format("{\"before\":{\"amount\":\"%s\"},\"after\":{\"amount\":\"%s\"}}", oldTotal, totalAmount);
         eventRepo.save(new ExpenseEvent(groupId, expenseId, "ExpenseUpdated", payload));
 
@@ -645,30 +594,26 @@ public class ExpenseService {
         requireActorMember(groupId, actorUserId);
         Expense ex = expenseRepo.findById(expenseId).orElseThrow(() -> new NotFoundException("Expense not found"));
         if (!ex.getGroupId().equals(groupId)) throw new BadRequestException("Expense does not belong to group");
-        if (ex.isVoided()) return; // idempotent
+        if (ex.isVoided()) return;
 
-        // fetch participants
         Map<Long, BigDecimal> shares = new LinkedHashMap<>();
         for (ExpenseParticipant p : participantRepo.findByExpense_Id(expenseId))
             shares.put(p.getUserId(), p.getShareAmount());
 
-        // reverse ledger entries
         BigDecimal total = ex.getAmount();
-        LedgerEntry payerEntry = ledger(groupId, ex.getPayerUserId());
+        LedgerEntry payerEntry = getOrCreateLedgerEntry(groupId, ex.getPayerUserId());
         payerEntry.add(total.negate());
         ledgerRepo.save(payerEntry);
 
-        for (var e : shares.entrySet()) {
-            LedgerEntry le = ledger(groupId, e.getKey());
-            le.add(e.getValue()); // reverse the negative applied earlier
-            ledgerRepo.save(le);
+        for (var shareEntry : shares.entrySet()) {
+            LedgerEntry ledgerEntry = getOrCreateLedgerEntry(groupId, shareEntry.getKey());
+            ledgerEntry.add(shareEntry.getValue());
+            ledgerRepo.save(ledgerEntry);
         }
 
-        // mark voided
         ex.setVoided(true);
         expenseRepo.save(ex);
 
-        // persist event
         String payload = String.format("{\"expenseId\":%d,\"amount\":\"%s\"}", expenseId, total);
         eventRepo.save(new ExpenseEvent(groupId, expenseId, "ExpenseVoided", payload));
     }
@@ -676,7 +621,7 @@ public class ExpenseService {
     @Transactional
     public PaginatedResponse<EventResponse> listEvents(Long groupId, Long actorUserId, int page, int size, String sort, Instant fromDate, Instant toDate) {
         requireActorMember(groupId, actorUserId);
-        Sort sortBy = parseSort(sort);
+        Sort sortBy = SortUtils.parseSort(sort, "createdAt,desc");
         PageRequest pageRequest = PageRequest.of(page, size, sortBy);
 
         Page<ExpenseEvent> eventPage;
@@ -702,7 +647,7 @@ public class ExpenseService {
     @Transactional
     public PaginatedResponse<ConfirmedTransferResponse> listConfirmedTransfers(Long groupId, Long actorUserId, String confirmationId, int page, int size, String sort, Instant fromDate, Instant toDate) {
         requireActorMember(groupId, actorUserId);
-        Sort sortBy = parseSort(sort);
+        Sort sortBy = SortUtils.parseSort(sort, "createdAt,desc");
         PageRequest pageRequest = PageRequest.of(page, size, sortBy);
 
         Page<ConfirmedTransfer> transferPage;
